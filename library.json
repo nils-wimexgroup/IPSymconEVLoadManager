@@ -1,0 +1,12 @@
+{
+    "id": "{5D7E9A10-3C21-4B8F-9E12-7A6B5C4D3E2F}",
+    "author": "Nils Rudolph",
+    "name": "EV Lastmanagement",
+    "url": "",
+    "version": "1.0",
+    "build": 1,
+    "date": 1789000000,
+    "compatibility": {
+        "base": "7.0"
+    }
+}

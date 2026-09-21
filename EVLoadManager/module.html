@@ -1,0 +1,134 @@
+<style>
+    .lm { font-family: Arial, Helvetica, sans-serif; background: #ffffff; color: #1f2933; border: 1px solid #e5e7eb; border-radius: 16px; padding: 16px; }
+    .lm .hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .lm .big { font-size: 26px; font-weight: 700; line-height: 1; }
+    .lm .sub { font-size: 12px; color: #6b7280; margin-top: 3px; }
+    .lm .track { position: relative; height: 12px; border-radius: 6px; background: #eef1f5; overflow: hidden; margin-top: 12px; }
+    .lm .trackfill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: #2F80ED; transition: width .4s; }
+    .lm .tracklbl { font-size: 11px; color: #6b7280; margin-top: 5px; }
+    .lm .stn { display: flex; gap: 14px; align-items: flex-start; background: #f8fafc; border: 1px solid #eef1f5; border-radius: 12px; padding: 12px; margin-top: 12px; }
+    .lm .stninfo { flex: 1; min-width: 0; }
+    .lm .stnname { font-size: 14px; font-weight: 700; }
+    .lm .stnmeta { font-size: 11px; color: #6b7280; margin-top: 1px; }
+    .lm .sk { margin-top: 10px; }
+    .lm .sktop { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .lm .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .lm .skn { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lm .skmain { font-size: 13px; white-space: nowrap; }
+    .lm .star { cursor: pointer; font-size: 16px; color: #2F80ED; opacity: .35; user-select: none; line-height: 1; }
+    .lm .star.on { opacity: 1; }
+    .lm .pbadge { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #e7edfb; color: #1d4ed8; margin-left: 5px; font-weight: 700; }
+    .lm .skbar { position: relative; height: 7px; border-radius: 4px; background: #eef1f5; margin: 5px 0 2px; overflow: hidden; }
+    .lm .skfill { position: absolute; left: 0; top: 0; bottom: 0; background: currentColor; opacity: .9; border-radius: 4px; transition: width .4s; }
+    .lm .skset { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #1f2933; }
+    .lm .sksub { font-size: 11px; color: #6b7280; }
+</style>
+<div class="lm" id="lm">
+    <div class="hd">
+        <div>
+            <div class="big" id="e_power">- kW</div>
+            <div class="sub" id="e_state">Lastmanagement</div>
+        </div>
+    </div>
+    <div class="track"><div class="trackfill" id="e_budgetfill" style="width:0%"></div></div>
+    <div class="tracklbl" id="e_budgetlbl"></div>
+    <div id="e_stations"></div>
+</div>
+<script>
+    let evlmState = %%INITIAL%%;
+    const COL = { laden: '#2F80ED', bereit: '#F59E0B', frei: '#22C55E', fehler: '#EF4444' };
+    const LBL = { laden: 'laedt', bereit: 'bereit', frei: 'frei', fehler: 'Fehler' };
+    function agg(sk) {
+        if (sk.some(function (s) { return s.mode === 'fehler'; })) return 'fehler';
+        if (sk.some(function (s) { return s.mode === 'laden'; })) return 'laden';
+        if (sk.some(function (s) { return s.mode === 'bereit'; })) return 'bereit';
+        return 'frei';
+    }
+    function icon(cx, cy, mode) {
+        if (mode === 'laden') return '<path d="M' + (cx + 2) + ',' + (cy - 9) + ' L' + (cx - 6) + ',' + (cy + 1) + ' L' + (cx - 1) + ',' + (cy + 1) + ' L' + (cx - 2) + ',' + (cy + 9) + ' L' + (cx + 6) + ',' + (cy - 2) + ' L' + (cx + 1) + ',' + (cy - 2) + ' Z" fill="#fff"/>';
+        if (mode === 'fehler') return '<rect x="' + (cx - 1.6) + '" y="' + (cy - 9) + '" width="3.2" height="10" rx="1.6" fill="#fff"/><circle cx="' + cx + '" cy="' + (cy + 6) + '" r="1.9" fill="#fff"/>';
+        if (mode === 'bereit') return '<rect x="' + (cx - 4.5) + '" y="' + (cy - 6) + '" width="3.2" height="12" rx="1.4" fill="#fff"/><rect x="' + (cx + 1.3) + '" y="' + (cy - 6) + '" width="3.2" height="12" rx="1.4" fill="#fff"/>';
+        return '<path d="M' + (cx - 6) + ',' + cy + ' L' + (cx - 1) + ',' + (cy + 5) + ' L' + (cx + 7) + ',' + (cy - 6) + '" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+    function socketCap(cx, cy, r, mode) {
+        const c = COL[mode];
+        const ring = r + 4;
+        const circ = (2 * Math.PI * ring).toFixed(1);
+        let ringSvg;
+        if (mode === 'laden') {
+            const dash = (2 * Math.PI * ring * 0.33).toFixed(1);
+            ringSvg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring + '" fill="none" stroke="' + c + '" stroke-width="4" opacity="0.22"/>' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring + '" fill="none" stroke="' + c + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '">' +
+                '<animateTransform attributeName="transform" type="rotate" from="0 ' + cx + ' ' + cy + '" to="360 ' + cx + ' ' + cy + '" dur="2s" repeatCount="indefinite"/></circle>';
+        } else {
+            ringSvg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring + '" fill="none" stroke="' + c + '" stroke-width="4"/>';
+        }
+        return '<rect x="' + (cx - 9) + '" y="' + (cy - r - 9) + '" width="18" height="9" rx="3" fill="#3a3f45"/>' +
+            ringSvg +
+            '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#40454c" stroke="#2c3037" stroke-width="1.5"/>' +
+            icon(cx, cy, mode);
+    }
+    function alfenDevice(st) {
+        const sk = st.sockets.slice(0, 2);
+        const xs = sk.length >= 2 ? [73, 127] : [100];
+        let caps = '';
+        sk.forEach(function (s, i) { caps += socketCap(xs[i], 228, 22, s.mode); });
+        const body = '<path d="M64,12 L136,12 Q150,12 156,22 L164,40 Q168,48 168,58 L168,272 Q168,308 132,308 L68,308 Q32,308 32,272 L32,58 Q32,48 36,40 L44,22 Q50,12 64,12 Z" fill="#ffffff" stroke="#d1d5db" stroke-width="2.5"/>';
+        const display = '<rect x="58" y="70" width="84" height="54" rx="7" fill="#14171b"/>' +
+            '<rect x="61" y="73" width="78" height="48" rx="5" fill="#1b2026"/>' +
+            '<path d="M100,80 L108,83 L108,90 Q108,95 100,98 Q92,95 92,90 L92,83 Z" fill="#1AA0E0"/>' +
+            '<path d="M100,84 L102,89 L107,90 L102,91 L100,96 L98,91 L93,90 L98,89 Z" fill="#ffffff"/>' +
+            '<text x="100" y="110" text-anchor="middle" fill="#eaf6fd" font-family="Arial" font-size="9" font-weight="bold" letter-spacing="1.5">ALFEN</text>' +
+            '<text x="100" y="116" text-anchor="middle" fill="#6fa8c9" font-family="Arial" font-size="3.4" letter-spacing="1">POWER TO ADAPT</text>';
+        const rfid = '<g fill="none" stroke="#aab0b8" stroke-width="1.4" stroke-linecap="round">' +
+            '<circle cx="100" cy="138" r="1.6" fill="#aab0b8" stroke="none"/>' +
+            '<path d="M95,133 Q91,138 95,143"/><path d="M105,133 Q109,138 105,143"/>' +
+            '<path d="M92,130 Q86,138 92,146"/><path d="M108,130 Q114,138 108,146"/></g>';
+        return '<svg viewBox="0 0 200 320" width="78" height="125" style="flex:none">' + body + display + rfid + caps + '</svg>';
+    }
+    function render(v) {
+        if (!v || typeof v !== 'object') return;
+        evlmState = v;
+        document.getElementById('e_power').textContent = (v.power != null ? Number(v.power).toFixed(1) : '-') + ' kW';
+        document.getElementById('e_state').textContent = v.active ? 'Lastmanagement aktiv' : 'Lastmanagement aus';
+        const pct = v.budget > 0 ? Math.min(100, Math.round(v.used / v.budget * 100)) : 0;
+        document.getElementById('e_budgetfill').style.width = pct + '%';
+        document.getElementById('e_budgetlbl').textContent =
+            Number(v.used || 0).toFixed(0) + ' A / ' + Number(v.budget || 0).toFixed(0) + ' A (' + pct + '%) · frei ' + Number(v.free || 0).toFixed(0) + ' A';
+        const wrap = document.getElementById('e_stations');
+        wrap.innerHTML = '';
+        (v.stations || []).forEach(function (st) {
+            let socks = '';
+            st.sockets.forEach(function (s) {
+                const c = COL[s.mode];
+                const main = s.mode === 'laden'
+                    ? '<b style="color:' + c + '">' + Number(s.power).toFixed(1) + ' kW</b>'
+                    : '<span style="color:' + c + '">' + LBL[s.mode] + '</span>';
+                const star = s.perm
+                    ? '<span class="star on" title="Dauer-Vorrang">★</span>'
+                    : '<span class="star' + (s.session ? ' on' : '') + '" title="Vorrang bis Ladeende" onclick="evlmPrio(' + s.idx + ',' + (s.session ? 1 : 0) + ')">' + (s.session ? '★' : '☆') + '</span>';
+                const permb = s.perm ? '<span class="pbadge">Dauer</span>' : '';
+                const fillPct = s.max > 0 ? Math.min(100, Math.round(s.act / s.max * 100)) : 0;
+                const setPct = s.max > 0 ? Math.min(100, Math.round(s.set / s.max * 100)) : 0;
+                socks += '<div class="sk">' +
+                    '<div class="sktop"><span class="dot" style="background:' + c + '"></span>' +
+                    '<span class="skn">' + s.name + permb + '</span>' +
+                    '<span class="skmain">' + main + '</span>' + star + '</div>' +
+                    '<div class="skbar" style="color:' + c + '"><div class="skfill" style="width:' + fillPct + '%"></div><div class="skset" style="left:' + setPct + '%"></div></div>' +
+                    '<div class="sksub">Ist ' + Number(s.act).toFixed(1) + ' A · Soll ' + s.set + ' A</div>' +
+                    '</div>';
+            });
+            const maxtxt = st.max != null ? 'max ' + Number(st.max).toFixed(0) + ' A · ' : '';
+            const card = document.createElement('div');
+            card.className = 'stn';
+            card.innerHTML = alfenDevice(st) +
+                '<div class="stninfo"><div class="stnname">' + st.name + '</div>' +
+                '<div class="stnmeta">' + maxtxt + Number(st.power).toFixed(1) + ' kW</div>' +
+                '<div>' + socks + '</div></div>';
+            wrap.appendChild(card);
+        });
+    }
+    function handleMessage(d) { try { render(typeof d === 'string' ? JSON.parse(d) : d); } catch (e) { } }
+    function evlmPrio(idx, cur) { if (typeof requestAction === 'function') requestAction('CP' + idx + '_PrioSession', cur ? false : true); }
+    render(evlmState);
+</script>

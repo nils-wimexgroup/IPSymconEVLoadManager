@@ -1,0 +1,39 @@
+{
+    "translations": {
+        "de": {},
+        "en": {
+            "Dynamisches Lastmanagement (Water-Filling) mit Gruppen/Saeulen und Priorisierung. Liest Status/Strom der Ladepunkte und schreibt die Sollwerte zurueck.": "Dynamic load management (water-filling) with groups/stations and prioritisation. Reads charge point status/current and writes back the setpoints.",
+            "Lastmanagement aktiv": "Load management active",
+            "Grundeinstellungen": "Basic settings",
+            "Gesamtbudget pro Phase": "Total budget per phase",
+            "Mindeststrom je Ladepunkt": "Minimum current per charge point",
+            "Regelintervall": "Control interval",
+            "Feineinstellung": "Fine tuning",
+            "Hysterese (will-mehr ab Ist >= Soll - Hyst)": "Hysteresis (wants more when actual >= set - hyst)",
+            "Headroom ueber Ist (muss groesser als Hysterese sein)": "Headroom above actual (must be greater than hysteresis)",
+            "Minimale Sollwertaenderung": "Minimum setpoint change",
+            "Watchdog Valid-Time (0 = aus)": "Watchdog valid time (0 = off)",
+            "Saeulen / Gruppen (gemeinsames Limit, z. B. Dual-Socket)": "Stations / groups (shared limit, e.g. dual socket)",
+            "Gruppenname": "Group name",
+            "Max A (beide zusammen)": "Max A (both together)",
+            "Ladepunkte": "Charge points",
+            "Name": "Name",
+            "Gruppe": "Group",
+            "Status (Reg 1201)": "Status (reg 1201)",
+            "Strom L1": "Current L1",
+            "Strom L2": "Current L2",
+            "Strom L3": "Current L3",
+            "Sollwert (Reg 1210, schreibbar)": "Setpoint (reg 1210, writable)",
+            "Watchdog (Reg 1208)": "Watchdog (reg 1208)",
+            "Dauer-Vorrang": "Permanent priority",
+            "Jetzt regeln": "Balance now",
+            "Aktiv": "Active",
+            "Inaktiv (Lastmanagement aus)": "Inactive (load management off)",
+            "Budget": "Budget",
+            "Zugeteilt gesamt": "Allocated total",
+            "Frei": "Free",
+            "Aktive Ladepunkte": "Active charge points",
+            "Leistung gesamt": "Total power"
+        }
+    }
+}

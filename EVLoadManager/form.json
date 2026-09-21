@@ -1,0 +1,52 @@
+{
+    "elements": [
+        { "type": "Label", "caption": "Dynamisches Lastmanagement (Water-Filling) mit Gruppen/Saeulen und Priorisierung. Liest Status/Strom der Ladepunkte und schreibt die Sollwerte zurueck." },
+        { "type": "CheckBox", "name": "Active", "caption": "Lastmanagement aktiv" },
+        {
+            "type": "ExpansionPanel", "caption": "Grundeinstellungen", "expanded": true,
+            "items": [
+                { "type": "NumberSpinner", "name": "BudgetA", "caption": "Gesamtbudget pro Phase", "digits": 1, "suffix": " A" },
+                { "type": "NumberSpinner", "name": "MinA", "caption": "Mindeststrom je Ladepunkt", "digits": 1, "suffix": " A" },
+                { "type": "NumberSpinner", "name": "Interval", "caption": "Regelintervall", "suffix": " s" }
+            ]
+        },
+        {
+            "type": "ExpansionPanel", "caption": "Feineinstellung", "expanded": false,
+            "items": [
+                { "type": "NumberSpinner", "name": "Hyst", "caption": "Hysterese (will-mehr ab Ist >= Soll - Hyst)", "digits": 1, "suffix": " A" },
+                { "type": "NumberSpinner", "name": "Headroom", "caption": "Headroom ueber Ist (muss groesser als Hysterese sein)", "digits": 1, "suffix": " A" },
+                { "type": "NumberSpinner", "name": "MinStep", "caption": "Minimale Sollwertaenderung", "digits": 1, "suffix": " A" },
+                { "type": "NumberSpinner", "name": "ValidTime", "caption": "Watchdog Valid-Time (0 = aus)", "suffix": " s" }
+            ]
+        },
+        {
+            "type": "List", "name": "Groups", "caption": "Saeulen / Gruppen (gemeinsames Limit, z. B. Dual-Socket)", "add": true, "delete": true, "rowCount": 3,
+            "columns": [
+                { "caption": "Gruppenname", "name": "Name", "width": "auto", "add": "Saeule 1", "edit": { "type": "ValidationTextBox" } },
+                { "caption": "Max A (beide zusammen)", "name": "MaxA", "width": "180px", "add": 32, "edit": { "type": "NumberSpinner", "digits": 1 } }
+            ]
+        },
+        {
+            "type": "List", "name": "ChargePoints", "caption": "Ladepunkte", "add": true, "delete": true, "rowCount": 6,
+            "columns": [
+                { "caption": "Name", "name": "Name", "width": "120px", "add": "Ladepunkt", "edit": { "type": "ValidationTextBox" } },
+                { "caption": "Gruppe", "name": "Group", "width": "100px", "add": "Saeule 1", "edit": { "type": "ValidationTextBox" } },
+                { "caption": "Max A", "name": "MaxA", "width": "70px", "add": 32, "edit": { "type": "NumberSpinner", "digits": 1 } },
+                { "caption": "Status (Reg 1201)", "name": "StateVar", "width": "130px", "add": 0, "edit": { "type": "SelectVariable" } },
+                { "caption": "Strom L1", "name": "CurL1", "width": "110px", "add": 0, "edit": { "type": "SelectVariable" } },
+                { "caption": "Strom L2", "name": "CurL2", "width": "110px", "add": 0, "edit": { "type": "SelectVariable" } },
+                { "caption": "Strom L3", "name": "CurL3", "width": "110px", "add": 0, "edit": { "type": "SelectVariable" } },
+                { "caption": "Sollwert (Reg 1210, schreibbar)", "name": "SetVar", "width": "170px", "add": 0, "edit": { "type": "SelectVariable" } },
+                { "caption": "Watchdog (Reg 1208)", "name": "ValidVar", "width": "130px", "add": 0, "edit": { "type": "SelectVariable" } },
+                { "caption": "Dauer-Vorrang", "name": "Prio", "width": "110px", "add": false, "edit": { "type": "CheckBox" } }
+            ]
+        }
+    ],
+    "actions": [
+        { "type": "Button", "caption": "Jetzt regeln", "onClick": "EVLM_Balance($id);" }
+    ],
+    "status": [
+        { "code": 102, "icon": "active", "caption": "Aktiv" },
+        { "code": 104, "icon": "inactive", "caption": "Inaktiv (Lastmanagement aus)" }
+    ]
+}

@@ -1,0 +1,12 @@
+{
+    "id": "{8C1F2A3B-4D5E-6071-8293-A4B5C6D7E8F9}",
+    "name": "EVLoadManager",
+    "type": 3,
+    "vendor": "",
+    "aliases": ["EV Lastmanagement", "Lastmanagement Wallbox", "Ladelastmanagement"],
+    "url": "",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "EVLM"
+}

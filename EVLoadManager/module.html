@@ -37,7 +37,7 @@
 <script>
     let evlmState = %%INITIAL%%;
     const COL = { laden: '#2F80ED', bereit: '#F59E0B', frei: '#22C55E', fehler: '#EF4444' };
-    const LBL = { laden: 'laedt', bereit: 'bereit', frei: 'frei', fehler: 'Fehler' };
+    const LBL = { laden: 'lädt', bereit: 'bereit', frei: 'frei', fehler: 'Fehler' };
     function agg(sk) {
         if (sk.some(function (s) { return s.mode === 'fehler'; })) return 'fehler';
         if (sk.some(function (s) { return s.mode === 'laden'; })) return 'laden';

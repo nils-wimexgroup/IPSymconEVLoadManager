@@ -39,6 +39,9 @@ class EVLoadManager extends IPSModule
         $this->RegisterVariableFloat('PowerTotal', 'Leistung gesamt', 'EVLM.kW', 50);
 
         $this->RegisterTimer('Balance', 0, 'EVLM_Balance($_IPS[\'TARGET\']);');
+
+        // HTML-SDK-Kachel aktivieren (ohne dies zeigt Symcon nur die Variablenliste als Text)
+        $this->SetVisualizationType(1);
     }
 
     public function ApplyChanges()
@@ -48,8 +51,8 @@ class EVLoadManager extends IPSModule
         $this->MaintainChargePointVariables();
 
         $active = $this->ReadPropertyBoolean('Active');
-        $interval = $active ? max(5, $this->ReadPropertyInteger('Interval')) * 1000 : 0;
-        $this->SetTimerInterval('Balance', $interval);
+        // Timer laeuft immer (liest Ist-Werte + aktualisiert die Kachel); Sollwerte werden nur bei aktivem Management geschrieben.
+        $this->SetTimerInterval('Balance', max(5, $this->ReadPropertyInteger('Interval')) * 1000);
         $this->SetStatus($active ? 102 : 104);
 
         if (IPS_GetKernelRunlevel() == KR_READY) {

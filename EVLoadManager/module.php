@@ -48,6 +48,9 @@ class EVLoadManager extends IPSModule
     {
         parent::ApplyChanges();
 
+        // HTML-Kachel aktivieren - greift auch bei bestehenden Instanzen, sobald "Uebernehmen" gedrueckt wird
+        $this->SetVisualizationType(1);
+
         $this->MaintainChargePointVariables();
 
         $active = $this->ReadPropertyBoolean('Active');
@@ -202,7 +205,7 @@ class EVLoadManager extends IPSModule
                 $data[$i]['alloc'] = $s['set'];
             }
 
-            $this->SetValueSafe("CP{$i}_State", $s['state']);
+            $this->SetValueSafe("CP{$i}_State", $s['stateLabel'] !== '' ? $s['stateLabel'] : $s['state']);
             $this->SetValueSafe("CP{$i}_Alloc", (float) $data[$i]['alloc']);
             $this->SetValueSafe("CP{$i}_Power", (float) $s['power']);
 
@@ -293,7 +296,7 @@ class EVLoadManager extends IPSModule
                 'idx'     => $i,
                 'name'    => $s['name'],
                 'mode'    => $mode,
-                'state'   => $s['state'] !== '' ? $s['state'] : $mode,
+                'state'   => $s['stateLabel'] !== '' ? $s['stateLabel'] : $mode,
                 'act'     => round($s['act'], 1),
                 'set'     => (int) round($s['alloc']),
                 'max'     => round($s['max'], 1),
@@ -410,6 +413,7 @@ class EVLoadManager extends IPSModule
                 'power'       => round($sum * 230 / 1000, 1),
                 'set'         => $set,
                 'state'       => $stateStr,
+                'stateLabel'  => $this->Mode3Label($stateStr),
                 'active'      => $isActive,
                 'ready'       => $isReady,
                 'error'       => $isError,
@@ -434,6 +438,35 @@ class EVLoadManager extends IPSModule
         if ($id && IPS_VariableExists($id)) {
             SetValue($id, $value);
         }
+    }
+
+    // Mode-3-Status (IEC 61851, z. B. "C2") in deutschen Klartext uebersetzen
+    private function Mode3Label($state)
+    {
+        $s = strtoupper(trim((string) $state));
+        if ($s === '') {
+            return '';
+        }
+        switch ($s) {
+            case 'A':  return 'Frei';
+            case 'B1': return 'Verbunden';
+            case 'B2': return 'Bereit';
+            case 'C1': return 'Bereit';
+            case 'C2': return 'Lädt';
+            case 'D1':
+            case 'D2': return 'Lädt (belüftet)';
+            case 'E':  return 'Fehler (E)';
+            case 'F':  return 'Fehler (F)';
+        }
+        switch (substr($s, 0, 1)) {
+            case 'A': return 'Frei';
+            case 'B': return 'Bereit';
+            case 'C': return 'Lädt';
+            case 'D': return 'Lädt';
+            case 'E':
+            case 'F': return 'Fehler';
+        }
+        return $s;
     }
 
     private function MaintainChargePointVariables()

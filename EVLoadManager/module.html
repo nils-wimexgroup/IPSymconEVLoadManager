@@ -6,7 +6,8 @@
     .lm .track { position: relative; height: 12px; border-radius: 6px; background: #eef1f5; overflow: hidden; margin-top: 12px; }
     .lm .trackfill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: #2F80ED; transition: width .4s; }
     .lm .tracklbl { font-size: 11px; color: #6b7280; margin-top: 5px; }
-    .lm .stn { display: flex; gap: 14px; align-items: flex-start; background: #f8fafc; border: 1px solid #eef1f5; border-radius: 12px; padding: 12px; margin-top: 12px; }
+    .lm #e_stations { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+    .lm .stn { display: flex; gap: 14px; align-items: flex-start; background: #f8fafc; border: 1px solid #eef1f5; border-radius: 12px; padding: 12px; flex: 1 1 320px; min-width: 300px; }
     .lm .stninfo { flex: 1; min-width: 0; }
     .lm .stnname { font-size: 14px; font-weight: 700; }
     .lm .stnmeta { font-size: 11px; color: #6b7280; margin-top: 1px; }
@@ -110,12 +111,13 @@
                 const permb = s.perm ? '<span class="pbadge">Dauer</span>' : '';
                 const fillPct = s.max > 0 ? Math.min(100, Math.round(s.act / s.max * 100)) : 0;
                 const setPct = s.max > 0 ? Math.min(100, Math.round(s.set / s.max * 100)) : 0;
+                const esub = (s.energy && s.energy > 0) ? ' · <b>' + Number(s.energy).toFixed(1) + ' kWh</b> Session' : '';
                 socks += '<div class="sk">' +
                     '<div class="sktop"><span class="dot" style="background:' + c + '"></span>' +
                     '<span class="skn">' + s.name + permb + '</span>' +
                     '<span class="skmain">' + main + '</span>' + star + '</div>' +
                     '<div class="skbar" style="color:' + c + '"><div class="skfill" style="width:' + fillPct + '%"></div><div class="skset" style="left:' + setPct + '%"></div></div>' +
-                    '<div class="sksub">Ist ' + Number(s.act).toFixed(1) + ' A · Soll ' + s.set + ' A</div>' +
+                    '<div class="sksub">Ist ' + Number(s.act).toFixed(1) + ' A · Soll ' + s.set + ' A' + esub + '</div>' +
                     '</div>';
             });
             const maxtxt = st.max != null ? 'max ' + Number(st.max).toFixed(0) + ' A · ' : '';

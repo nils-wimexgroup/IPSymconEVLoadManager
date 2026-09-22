@@ -25,10 +25,12 @@ class EVLoadManager extends IPSModule
         $this->RegisterPropertyFloat('Hyst', 1.0);
         $this->RegisterPropertyFloat('Headroom', 2.0);
         $this->RegisterPropertyFloat('MinStep', 1.0);
-        $this->RegisterPropertyInteger('Interval', 20);
+        $this->RegisterPropertyInteger('Interval', 15);
         $this->RegisterPropertyInteger('ValidTime', 0);
         $this->RegisterPropertyString('Groups', '[]');
         $this->RegisterPropertyString('ChargePoints', '[]');
+
+        $this->RegisterAttributeString('SessionState', '{}');
 
         $this->RegisterProfiles();
 
@@ -55,12 +57,54 @@ class EVLoadManager extends IPSModule
 
         $active = $this->ReadPropertyBoolean('Active');
         // Timer laeuft immer (liest Ist-Werte + aktualisiert die Kachel); Sollwerte werden nur bei aktivem Management geschrieben.
-        $this->SetTimerInterval('Balance', max(5, $this->ReadPropertyInteger('Interval')) * 1000);
+        // Watchdog-Sicherheit: nie langsamer schreiben als die halbe Gueltigkeitszeit (ValidTime>0 = per Reg 1208
+        // gesetzt, 0 = Box-Default 60 s angenommen) und hoechstens alle 30 s, damit der Alfen-Sollwert nie verfaellt.
+        $interval = max(5, $this->ReadPropertyInteger('Interval'));
+        $valid = (int) $this->ReadPropertyInteger('ValidTime');
+        $wdMax = ($valid > 0) ? max(5, (int) floor($valid / 2)) : 30;
+        $this->SetTimerInterval('Balance', min($interval, $wdMax) * 1000);
         $this->SetStatus($active ? 102 : 104);
 
         if (IPS_GetKernelRunlevel() == KR_READY) {
             $this->Balance();
         }
+    }
+
+    /**
+     * Formular dynamisch aufbauen: die Wallbox-Auswahl je Ladepunkt wird aus den
+     * definierten Saeulen/Gruppen als Dropdown befuellt (kein manuelles Eintippen).
+     */
+    public function GetConfigurationForm()
+    {
+        $form = json_decode(@file_get_contents(__DIR__ . '/form.json'), true);
+        if (!is_array($form)) {
+            return '{"elements":[]}';
+        }
+        $options = [['caption' => '(keine)', 'value' => '']];
+        $groups = json_decode($this->ReadPropertyString('Groups'), true);
+        if (is_array($groups)) {
+            foreach ($groups as $g) {
+                $name = trim((string) ($g['Name'] ?? ''));
+                if ($name !== '') {
+                    $options[] = ['caption' => $name, 'value' => $name];
+                }
+            }
+        }
+        if (isset($form['elements']) && is_array($form['elements'])) {
+            foreach ($form['elements'] as &$el) {
+                if (($el['type'] ?? '') === 'List' && ($el['name'] ?? '') === 'ChargePoints' && isset($el['columns'])) {
+                    foreach ($el['columns'] as &$col) {
+                        if (($col['name'] ?? '') === 'Group') {
+                            $col['add'] = '';
+                            $col['edit'] = ['type' => 'Select', 'options' => $options];
+                        }
+                    }
+                    unset($col);
+                }
+            }
+            unset($el);
+        }
+        return json_encode($form);
     }
 
     /**
@@ -78,6 +122,12 @@ class EVLoadManager extends IPSModule
 
         $data = $this->ReadChargePoints();
         $caps = $this->GetGroupCaps();
+
+        // Session-Energie: Startwerte je Socket (persistent)
+        $sess = json_decode($this->ReadAttributeString('SessionState'), true);
+        if (!is_array($sess)) {
+            $sess = [];
+        }
 
         // ---- Bedarf bestimmen ----
         foreach ($data as $i => &$s) {
@@ -194,9 +244,14 @@ class EVLoadManager extends IPSModule
             }
 
             if ($active && $s['setVar'] > 0 && IPS_VariableExists($s['setVar'])) {
-                if (abs($target - $s['set']) >= $minstep || ($target == 0.0 && $s['set'] > 0.0)) {
-                    @RequestAction($s['setVar'], $target);
+                // Anti-Pendeln: kleine Aenderungen (< MinStep) nicht uebernehmen, sondern alten Sollwert halten.
+                if (abs($target - $s['set']) < $minstep && !($target == 0.0 && $s['set'] > 0.0)) {
+                    $target = floor($s['set']);
                 }
+                // WICHTIG: Sollwert JEDEN Zyklus schreiben (auch unveraendert), um den Alfen-Watchdog
+                // (Reg 1210, Gueltigkeit per Reg 1208, Default 60 s) aufzufrischen. Sonst verfaellt der
+                // Sollwert und die Box faellt auf ihren (evtl. hoeheren) Fallback zurueck -> Oszillation.
+                @RequestAction($s['setVar'], $target);
                 if ($validT > 0 && $s['validVar'] > 0 && IPS_VariableExists($s['validVar'])) {
                     @RequestAction($s['validVar'], $validT);
                 }
@@ -209,12 +264,31 @@ class EVLoadManager extends IPSModule
             $this->SetValueSafe("CP{$i}_Alloc", (float) $data[$i]['alloc']);
             $this->SetValueSafe("CP{$i}_Power", (float) $s['power']);
 
+            // Session-Energie = aktueller Zaehlerstand - Zaehlerstand bei Ladestart
+            $connected = ($s['active'] || $s['ready']);
+            $stKey = (string) $i;
+            $stState = (isset($sess[$stKey]) && is_array($sess[$stKey])) ? $sess[$stKey] : ['start' => null, 'conn' => false];
+            if ($connected && $s['energyVar'] > 0) {
+                if (empty($stState['conn']) || $stState['start'] === null) {
+                    $stState['start'] = $s['meter']; // neuer Ladevorgang -> Startwert merken
+                }
+                $stState['conn'] = true;
+                $data[$i]['energy'] = max(0.0, $s['meter'] - (float) $stState['start']);
+            } else {
+                $stState['conn'] = false;
+                $data[$i]['energy'] = 0.0;
+            }
+            $sess[$stKey] = $stState;
+            $this->SetValueSafe("CP{$i}_Energy", (float) $data[$i]['energy']);
+
             $powerTotal += $s['power'];
             if ($s['active']) {
                 $activeCount++;
                 $used += $data[$i]['alloc'];
             }
         }
+
+        $this->WriteAttributeString('SessionState', json_encode($sess));
 
         $this->SetValueSafe('Budget', $budget);
         $this->SetValueSafe('Used', $used);
@@ -301,6 +375,7 @@ class EVLoadManager extends IPSModule
                 'set'     => (int) round($s['alloc']),
                 'max'     => round($s['max'], 1),
                 'power'   => round($s['power'], 1),
+                'energy'  => round($s['energy'] ?? 0, 2),
                 'perm'    => $perm,
                 'session' => $sess,
                 'prio'    => ($perm || $sess)
@@ -342,6 +417,24 @@ class EVLoadManager extends IPSModule
         return $caps;
     }
 
+    // Hersteller je Gruppe/Wallbox: 'alfen' (geraetespezifische Statustabelle)
+    // oder 'standard' (IEC 61851). Fehlt/leer -> 'alfen' (Bestandsverhalten).
+    private function GetGroupVendors()
+    {
+        $groups = json_decode($this->ReadPropertyString('Groups'), true);
+        $vendors = [];
+        if (is_array($groups)) {
+            foreach ($groups as $g) {
+                $name = trim((string) ($g['Name'] ?? ''));
+                if ($name !== '') {
+                    $v = strtolower(trim((string) ($g['Vendor'] ?? '')));
+                    $vendors[$name] = ($v === 'standard') ? 'standard' : 'alfen';
+                }
+            }
+        }
+        return $vendors;
+    }
+
     private function ReadChargePoints()
     {
         $cps = json_decode($this->ReadPropertyString('ChargePoints'), true);
@@ -349,6 +442,7 @@ class EVLoadManager extends IPSModule
             $cps = [];
         }
 
+        $vendors = $this->GetGroupVendors();
         $out = [];
         $idx = 0;
         foreach ($cps as $cp) {
@@ -358,8 +452,11 @@ class EVLoadManager extends IPSModule
             $stateVar = (int) ($cp['StateVar'] ?? 0);
             $setVar   = (int) ($cp['SetVar'] ?? 0);
             $validVar = (int) ($cp['ValidVar'] ?? 0);
+            $energyVar = (int) ($cp['EnergyVar'] ?? 0);
             $maxA     = (float) ($cp['MaxA'] ?? 32);
             $curVars  = [(int) ($cp['CurL1'] ?? 0), (int) ($cp['CurL2'] ?? 0), (int) ($cp['CurL3'] ?? 0)];
+            $group    = trim((string) ($cp['Group'] ?? ''));
+            $vendor   = $vendors[$group] ?? 'alfen';
 
             $act = 0.0;
             $sum = 0.0;
@@ -371,14 +468,22 @@ class EVLoadManager extends IPSModule
                 }
             }
             $set      = ($setVar > 0 && IPS_VariableExists($setVar)) ? (float) @GetValue($setVar) : 0.0;
+            $meter    = ($energyVar > 0 && IPS_VariableExists($energyVar)) ? (float) @GetValue($energyVar) : 0.0;
             $stateStr = ($stateVar > 0 && IPS_VariableExists($stateVar)) ? (string) @GetValue($stateVar) : '';
             $letter   = strlen($stateStr) > 0 ? strtoupper(substr($stateStr, 0, 1)) : '';
 
-            $isError = ($letter === 'E' || $letter === 'F');
+            // Fehler-Erkennung je Hersteller:
+            //  Alfen (geraetespezifisch): A und F = Fehler, E = Leerlauf/ohne Kabel (kein Fehler)
+            //  Standard (IEC 61851):      E und F = Fehler, A = kein Fahrzeug (frei)
+            if ($vendor === 'alfen') {
+                $isError = ($letter === 'A' || $letter === 'F');
+            } else {
+                $isError = ($letter === 'E' || $letter === 'F');
+            }
             if ($isError) {
                 $isActive = false;
                 $isReady = false;
-            } elseif ($letter === 'C') {
+            } elseif ($letter === 'C' || $letter === 'D') {
                 $isActive = true;
                 $isReady = false;
             } elseif ($letter === 'B') {
@@ -404,16 +509,20 @@ class EVLoadManager extends IPSModule
 
             $out[$idx] = [
                 'name'        => (string) ($cp['Name'] ?? ('Ladepunkt ' . ($idx + 1))),
-                'group'       => trim((string) ($cp['Group'] ?? '')),
+                'group'       => $group,
+                'vendor'      => $vendor,
                 'max'         => $maxA,
                 'setVar'      => $setVar,
                 'validVar'    => $validVar,
+                'energyVar'   => $energyVar,
+                'meter'       => $meter,
+                'energy'      => 0.0,
                 'act'         => $act,
                 'sum'         => $sum,
                 'power'       => round($sum * 230 / 1000, 1),
                 'set'         => $set,
                 'state'       => $stateStr,
-                'stateLabel'  => $this->Mode3Label($stateStr),
+                'stateLabel'  => $this->Mode3Label($stateStr, $vendor),
                 'active'      => $isActive,
                 'ready'       => $isReady,
                 'error'       => $isError,
@@ -440,30 +549,35 @@ class EVLoadManager extends IPSModule
         }
     }
 
-    // Mode-3-Status (IEC 61851, z. B. "C2") in deutschen Klartext uebersetzen
-    private function Mode3Label($state)
+    // Mode-3-Status (IEC 61851, z. B. "C2") in deutschen Klartext uebersetzen.
+    // A und E werden je Hersteller unterschiedlich gedeutet:
+    //   Alfen:    A = Fehler, E = Frei (Leerlauf/ohne Kabel)
+    //   Standard: A = Frei (kein Fahrzeug), E = Fehler (IEC 61851)
+    private function Mode3Label($state, $vendor = 'alfen')
     {
         $s = strtoupper(trim((string) $state));
         if ($s === '') {
             return '';
         }
+        $labelA = ($vendor === 'alfen') ? 'Fehler (A)' : 'Frei';
+        $labelE = ($vendor === 'alfen') ? 'Frei' : 'Fehler (E)';
         switch ($s) {
-            case 'A':  return 'Frei';
+            case 'A':  return $labelA;
             case 'B1': return 'Verbunden';
             case 'B2': return 'Bereit';
             case 'C1': return 'Bereit';
             case 'C2': return 'Lädt';
             case 'D1':
             case 'D2': return 'Lädt (belüftet)';
-            case 'E':  return 'Fehler (E)';
+            case 'E':  return $labelE;
             case 'F':  return 'Fehler (F)';
         }
         switch (substr($s, 0, 1)) {
-            case 'A': return 'Frei';
+            case 'A': return $labelA;
             case 'B': return 'Bereit';
             case 'C': return 'Lädt';
             case 'D': return 'Lädt';
-            case 'E':
+            case 'E': return $labelE;
             case 'F': return 'Fehler';
         }
         return $s;
@@ -483,6 +597,7 @@ class EVLoadManager extends IPSModule
             $this->MaintainVariable("CP{$i}_State", $name . ' - Status',            3, '',            $base + 1, $keep);
             $this->MaintainVariable("CP{$i}_Alloc", $name . ' - Sollwert',          2, 'EVLM.Ampere', $base + 2, $keep);
             $this->MaintainVariable("CP{$i}_Power", $name . ' - Leistung',          2, 'EVLM.kW',     $base + 3, $keep);
+            $this->MaintainVariable("CP{$i}_Energy", $name . ' - Session-Energie',  2, 'EVLM.kWh',    $base + 5, $keep);
             $this->MaintainVariable("CP{$i}_PrioSession", $name . ' - Vorrang (Sitzung)', 0, '~Switch', $base + 4, $keep);
             if ($keep) {
                 $this->EnableAction("CP{$i}_PrioSession");
@@ -505,6 +620,13 @@ class EVLoadManager extends IPSModule
             IPS_SetVariableProfileDigits('EVLM.kW', 2);
             IPS_SetVariableProfileText('EVLM.kW', '', ' kW');
             IPS_SetVariableProfileIcon('EVLM.kW', 'EnergyProduction');
+        }
+        if (!IPS_VariableProfileExists('EVLM.kWh')) {
+            IPS_CreateVariableProfile('EVLM.kWh', 2);
+            IPS_SetVariableProfileValues('EVLM.kWh', 0, 100000, 0);
+            IPS_SetVariableProfileDigits('EVLM.kWh', 2);
+            IPS_SetVariableProfileText('EVLM.kWh', '', ' kWh');
+            IPS_SetVariableProfileIcon('EVLM.kWh', 'Battery');
         }
     }
 }

@@ -15,8 +15,7 @@
             "items": [
                 { "type": "NumberSpinner", "name": "Hyst", "caption": "Hysterese (will-mehr ab Ist >= Soll - Hyst)", "digits": 1, "suffix": " A" },
                 { "type": "NumberSpinner", "name": "Headroom", "caption": "Headroom ueber Ist (muss groesser als Hysterese sein)", "digits": 1, "suffix": " A" },
-                { "type": "NumberSpinner", "name": "MinStep", "caption": "Minimale Sollwertaenderung", "digits": 1, "suffix": " A" },
-                { "type": "NumberSpinner", "name": "ValidTime", "caption": "Watchdog-Gueltigkeit in die Box schreiben (Reg 1208; 0 = Box-Default 60 s belassen)", "suffix": " s" }
+                { "type": "NumberSpinner", "name": "MinStep", "caption": "Minimale Sollwertaenderung", "digits": 1, "suffix": " A" }
             ]
         },
         {
@@ -38,7 +37,6 @@
                 { "caption": "Strom L2", "name": "CurL2", "width": "110px", "add": 0, "edit": { "type": "SelectVariable" } },
                 { "caption": "Strom L3", "name": "CurL3", "width": "110px", "add": 0, "edit": { "type": "SelectVariable" } },
                 { "caption": "Sollwert (Reg 1210, schreibbar)", "name": "SetVar", "width": "170px", "add": 0, "edit": { "type": "SelectVariable" } },
-                { "caption": "Watchdog (Reg 1208)", "name": "ValidVar", "width": "130px", "add": 0, "edit": { "type": "SelectVariable" } },
                 { "caption": "Energie-Zaehler (kWh)", "name": "EnergyVar", "width": "150px", "add": 0, "edit": { "type": "SelectVariable" } },
                 { "caption": "Dauer-Vorrang", "name": "Prio", "width": "110px", "add": false, "edit": { "type": "CheckBox" } }
             ]

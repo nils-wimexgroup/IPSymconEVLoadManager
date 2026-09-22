@@ -26,7 +26,6 @@ class EVLoadManager extends IPSModule
         $this->RegisterPropertyFloat('Headroom', 2.0);
         $this->RegisterPropertyFloat('MinStep', 1.0);
         $this->RegisterPropertyInteger('Interval', 15);
-        $this->RegisterPropertyInteger('ValidTime', 0);
         $this->RegisterPropertyString('Groups', '[]');
         $this->RegisterPropertyString('ChargePoints', '[]');
 
@@ -57,12 +56,9 @@ class EVLoadManager extends IPSModule
 
         $active = $this->ReadPropertyBoolean('Active');
         // Timer laeuft immer (liest Ist-Werte + aktualisiert die Kachel); Sollwerte werden nur bei aktivem Management geschrieben.
-        // Watchdog-Sicherheit: nie langsamer schreiben als die halbe Gueltigkeitszeit (ValidTime>0 = per Reg 1208
-        // gesetzt, 0 = Box-Default 60 s angenommen) und hoechstens alle 30 s, damit der Alfen-Sollwert nie verfaellt.
+        // Watchdog der Box ist fest (Default 60 s, per Modbus nur lesbar): hoechstens alle 30 s schreiben, damit der Sollwert nie verfaellt.
         $interval = max(5, $this->ReadPropertyInteger('Interval'));
-        $valid = (int) $this->ReadPropertyInteger('ValidTime');
-        $wdMax = ($valid > 0) ? max(5, (int) floor($valid / 2)) : 30;
-        $this->SetTimerInterval('Balance', min($interval, $wdMax) * 1000);
+        $this->SetTimerInterval('Balance', min($interval, 30) * 1000);
         $this->SetStatus($active ? 102 : 104);
 
         if (IPS_GetKernelRunlevel() == KR_READY) {
@@ -118,7 +114,6 @@ class EVLoadManager extends IPSModule
         $hyst     = $this->ReadPropertyFloat('Hyst');
         $headroom = $this->ReadPropertyFloat('Headroom');
         $minstep  = $this->ReadPropertyFloat('MinStep');
-        $validT   = $this->ReadPropertyInteger('ValidTime');
 
         $data = $this->ReadChargePoints();
         $caps = $this->GetGroupCaps();
@@ -252,9 +247,6 @@ class EVLoadManager extends IPSModule
                 // (Reg 1210, Gueltigkeit per Reg 1208, Default 60 s) aufzufrischen. Sonst verfaellt der
                 // Sollwert und die Box faellt auf ihren (evtl. hoeheren) Fallback zurueck -> Oszillation.
                 @RequestAction($s['setVar'], $target);
-                if ($validT > 0 && $s['validVar'] > 0 && IPS_VariableExists($s['validVar'])) {
-                    @RequestAction($s['validVar'], $validT);
-                }
                 $data[$i]['alloc'] = $target;
             } else {
                 $data[$i]['alloc'] = $s['set'];
@@ -451,7 +443,6 @@ class EVLoadManager extends IPSModule
             }
             $stateVar = (int) ($cp['StateVar'] ?? 0);
             $setVar   = (int) ($cp['SetVar'] ?? 0);
-            $validVar = (int) ($cp['ValidVar'] ?? 0);
             $energyVar = (int) ($cp['EnergyVar'] ?? 0);
             $maxA     = (float) ($cp['MaxA'] ?? 32);
             $curVars  = [(int) ($cp['CurL1'] ?? 0), (int) ($cp['CurL2'] ?? 0), (int) ($cp['CurL3'] ?? 0)];
@@ -513,7 +504,6 @@ class EVLoadManager extends IPSModule
                 'vendor'      => $vendor,
                 'max'         => $maxA,
                 'setVar'      => $setVar,
-                'validVar'    => $validVar,
                 'energyVar'   => $energyVar,
                 'meter'       => $meter,
                 'energy'      => 0.0,

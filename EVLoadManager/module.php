@@ -464,10 +464,10 @@ class EVLoadManager extends IPSModule
             $letter   = strlen($stateStr) > 0 ? strtoupper(substr($stateStr, 0, 1)) : '';
 
             // Fehler-Erkennung je Hersteller:
-            //  Alfen (geraetespezifisch): A und F = Fehler, E = Leerlauf/ohne Kabel (kein Fehler)
+            //  Alfen (geraetespezifisch): nur F = Fehler; A und E = Leerlauf/frei (kein Fehler)
             //  Standard (IEC 61851):      E und F = Fehler, A = kein Fahrzeug (frei)
             if ($vendor === 'alfen') {
-                $isError = ($letter === 'A' || $letter === 'F');
+                $isError = ($letter === 'F');
             } else {
                 $isError = ($letter === 'E' || $letter === 'F');
             }
@@ -541,7 +541,7 @@ class EVLoadManager extends IPSModule
 
     // Mode-3-Status (IEC 61851, z. B. "C2") in deutschen Klartext uebersetzen.
     // A und E werden je Hersteller unterschiedlich gedeutet:
-    //   Alfen:    A = Fehler, E = Frei (Leerlauf/ohne Kabel)
+    //   Alfen:    A und E = Frei (Leerlauf/ohne Kabel), nur F = Fehler
     //   Standard: A = Frei (kein Fahrzeug), E = Fehler (IEC 61851)
     private function Mode3Label($state, $vendor = 'alfen')
     {
@@ -549,7 +549,7 @@ class EVLoadManager extends IPSModule
         if ($s === '') {
             return '';
         }
-        $labelA = ($vendor === 'alfen') ? 'Fehler (A)' : 'Frei';
+        $labelA = 'Frei'; // A = kein Fahrzeug/frei (bei beiden Herstellern)
         $labelE = ($vendor === 'alfen') ? 'Frei' : 'Fehler (E)';
         switch ($s) {
             case 'A':  return $labelA;

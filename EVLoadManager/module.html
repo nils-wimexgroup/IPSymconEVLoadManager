@@ -132,7 +132,7 @@
             icon(cx, cy, mode);
     }
     function alfenDevice(st) {
-        const sk = st.sockets.slice(0, 2);
+        const sk = (st.sockets || []).slice(0, 2);
         const xs = sk.length >= 2 ? [73, 127] : [100];
         let caps = '';
         sk.forEach(function (s, i) { caps += socketCap(xs[i], 228, 22, s.mode); });
@@ -163,7 +163,7 @@
         el.setAttribute('data-theme', lum > 0.5 ? 'dark' : 'light');
     }
     function render(v) {
-        if (!v || typeof v !== 'object') return;
+        if (!v || typeof v !== 'object' || !Array.isArray(v.stations)) return;
         evlmState = v;
         evlmTheme();
         document.getElementById('e_power').textContent = (v.power != null ? Number(v.power).toFixed(1) : '-') + ' kW';
@@ -176,7 +176,7 @@
         wrap.innerHTML = '';
         (v.stations || []).forEach(function (st) {
             let socks = '';
-            st.sockets.forEach(function (s) {
+            (st.sockets || []).forEach(function (s) {
                 const c = COL[s.mode];
                 const main = s.mode === 'laden'
                     ? '<b style="color:' + c + '">' + Number(s.power).toFixed(1) + ' kW</b>'
@@ -206,7 +206,29 @@
             wrap.appendChild(card);
         });
     }
-    function handleMessage(d) { try { render(typeof d === 'string' ? JSON.parse(d) : d); } catch (e) { } }
+    // Symcon leitet JEDE postMessage an handleMessage weiter - die App schickt z. B. beim Antippen
+    // eigene Scroll-/Positions-Nachrichten. Nur echte Zustandsdaten des Moduls (mit stations-Liste)
+    // annehmen, alles andere ignorieren, sonst wird der Inhalt geleert.
+    function evlmParse(d, depth) {
+        depth = depth || 0;
+        if (depth > 3) return null;
+        if (typeof d === 'string') {
+            try { d = JSON.parse(d); } catch (e) { return null; }
+            return evlmParse(d, depth + 1);
+        }
+        if (!d || typeof d !== 'object') return null;
+        if (Array.isArray(d.stations)) return d;
+        const keys = ['data', 'value', 'payload'];
+        for (let i = 0; i < keys.length; i++) {
+            if (d[keys[i]] !== undefined) return evlmParse(d[keys[i]], depth + 1);
+        }
+        return null;
+    }
+    function handleMessage(d) {
+        const v = evlmParse(d);
+        if (!v) return;
+        try { render(v); } catch (e) { }
+    }
     function evlmPrio(idx, cur) { if (typeof requestAction === 'function') requestAction('CP' + idx + '_PrioSession', cur ? false : true); }
     // Design-Wechsel in Symcon (neue :root-Farben im <head>) sofort uebernehmen
     try { new MutationObserver(evlmTheme).observe(document.head, { childList: true, subtree: true, characterData: true }); } catch (e) { }

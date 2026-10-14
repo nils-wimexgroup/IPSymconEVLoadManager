@@ -1,0 +1,12 @@
+{
+    "id": "{FD2A745A-12F8-1A48-40AD-D84F70819EFF}",
+    "name": "EVAnalytics",
+    "type": 3,
+    "vendor": "",
+    "aliases": ["EV Auswertung", "Ladesäulen Auswertung"],
+    "url": "",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "EVAW"
+}

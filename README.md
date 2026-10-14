@@ -16,6 +16,11 @@ IPSymconEVLoadManager/
     form.json        Konfigurationsformular
     locale.json      Uebersetzungen
     module.html      Visualisierungs-Kachel (HTML SDK)
+  EVDataCollector/   EV Datensammler (Prefix EVDS): liest einen Standort, liefert an die Auswertung
+    lib/             Zaehlerlogik, Quellen, Minuten-Datensaetze (ohne Symcon testbar)
+  EVAnalytics/       EV Auswertung (Prefix EVAW): Archiv, Auswertungs-Kachel, CSV-Export
+    lib/             Zeitraeume, Belegung, Bericht, Archivzugriff
+  tests/             Tests ohne Symcon (php tests/run.php, php tests/sim/run_sim.php)
 ```
 
 ## Installation
@@ -52,6 +57,52 @@ Ladepunkt Status/Sollwert/Leistung) fuer eigene Visualisierungen bereit.
 ## Oeffentliche Funktion
 ```php
 EVLM_Balance(<InstanceID>);   // eine Regelrunde sofort ausfuehren
+```
+
+## EV Datensammler und EV Auswertung
+Zwei weitere Module werten die Ladesaeulen ueber laengere Zeit aus: Energie,
+Ladevorgaenge, Auslastung mit Heatmap, Leistungsspitzen gegen Budget bzw.
+Saeulen-Limit und CSV-Export, wahlweise fuer alle Standorte, einen Standort oder
+eine Saeule.
+
+**EV Datensammler** (eine Instanz je Standort)
+- Quelle **EVLM-Instanz**: Saeulen, Ladepunkte, Variablen, Budget und Limits
+  kommen aus deren Konfiguration.
+- Quelle **ChargePilot**: Ordner mit normalen Symcon-ModBus-Instanzen
+  (ModBus Address oder ModBus Device), je Saeule ein Unterordner, darin je
+  Ladepunkt ein Unterordner. Pflicht je Ladepunkt: Status (12328), Leistung
+  (12304), Energie (12324); optional Strom L1 (12306) und Soll-Strom (12374).
+  Jeder weitere Ladepunkt: Adresse + 256. Optional im Unterordner `Standort`:
+  4108 (Anzahl Ladepunkte) und 4112 (Hauptsicherung, ergibt das Budget).
+  Lesefunktion 4, ByteOrder 0 (Big-Endian), keine Schreibadresse.
+  „Ordner einlesen“ erkennt Ladepunkt und Wert an der Leseadresse, „Zuordnung
+  uebernehmen“ legt sie fest. Aendert der ChargePilot die Zahl der Ladepunkte,
+  haelt der Datensammler an (Status 205), bis neu eingelesen wird.
+- Fuehrt je Ladepunkt einen geprueften Zaehler (Ausreisser und Zaehlertausch
+  werden abgefangen) und schickt jede Minute einen Datensatz sowie den
+  Live-Stand. Ungelieferte Datensaetze bleiben im Puffer und werden nachgeholt.
+- „Alte Historie uebernehmen“ uebergibt die bisher archivierten Zaehlerstaende
+  des EVLM einmalig an die Auswertung; ein zweiter Lauf verdoppelt nichts.
+- Kennungen wie `ADF-LS01-1` haengen an der Statusvariable, nicht an der
+  Listenposition. Umsortieren vermischt keine Historie.
+
+**EV Auswertung** (eine Instanz, z. B. in der Zentrale)
+- Legt je Standort eine Kategorie mit archivierten Variablen an: je Ladepunkt
+  Zaehler (Aggregation Zaehler), Belegt und Leistung, dazu Leistung je Saeule
+  und Standort.
+- Kachel mit Zeitraum (Woche, Monat, Jahr, 12 Monate), Auswahl und CSV-Export.
+  Der CSV-Link laeuft ueber `/hook/evauswertung/csv` und gilt 5 Minuten.
+- Geschaeftszeiten fuer die Auslastung einstellbar (Standard Mo-Fr 7-18 Uhr).
+
+Oeffentliche Funktionen: `EVDS_Sample`, `EVDS_ScanFolder`, `EVDS_ApplyScan`,
+`EVDS_ImportHistory`, `EVDS_TestDelivery`, `EVAW_Ingest`, `EVAW_Housekeeping`.
+
+## Tests
+Die Rechenteile und beide Module laufen ohne Symcon:
+```
+php tests/run.php            Einzeltests (Zaehler, Zeitraeume, Belegung, Bericht, Quellen)
+php tests/sim/run_sim.php    zwei Tage Betrieb im Symcon-Nachbau (EVLM + ChargePilot)
+php tests/preview.php        Kachel mit Testdaten nach tests/out/tile-preview.html
 ```
 
 ## Hinweis

@@ -1,0 +1,32 @@
+{
+    "elements": [
+        { "type": "Label", "caption": "Wertet die Ladesäulen aller angeschlossenen Standorte aus: Energie, Ladevorgänge, Auslastung, Heatmap, Leistungsspitzen und CSV-Export. Die Daten liefern die EV Datensammler." },
+        {
+            "type": "ExpansionPanel", "caption": "Einstellungen", "expanded": true,
+            "items": [
+                { "type": "Label", "caption": "Geschäftszeiten Montag bis Freitag, für die Kennzahl „Auslastung zu Geschäftszeiten“." },
+                { "type": "NumberSpinner", "name": "BizFrom", "caption": "von", "suffix": " Uhr", "minimum": 0, "maximum": 23 },
+                { "type": "NumberSpinner", "name": "BizTo", "caption": "bis", "suffix": " Uhr", "minimum": 1, "maximum": 24 },
+                { "type": "NumberSpinner", "name": "OfflineAfter", "caption": "Standort gilt als ohne Verbindung nach", "suffix": " s", "minimum": 20 }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "List", "name": "SiteList", "caption": "Angeschlossene Standorte", "rowCount": 5, "add": false, "delete": false,
+            "columns": [
+                { "caption": "Kürzel", "name": "Code", "width": "80px" },
+                { "caption": "Standort", "name": "Name", "width": "auto" },
+                { "caption": "Quelle", "name": "Source", "width": "140px" },
+                { "caption": "Ladepunkte", "name": "Points", "width": "90px" },
+                { "caption": "Letzte Lieferung", "name": "Seen", "width": "160px" },
+                { "caption": "Folgenummer", "name": "Seq", "width": "110px" }
+            ],
+            "values": []
+        },
+        { "type": "Button", "caption": "Nachgereichte Daten jetzt neu aggregieren", "onClick": "EVAW_Housekeeping($id);" }
+    ],
+    "status": [
+        { "code": 102, "icon": "active", "caption": "Aktiv" }
+    ]
+}

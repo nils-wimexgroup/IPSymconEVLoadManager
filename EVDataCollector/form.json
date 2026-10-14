@@ -1,0 +1,53 @@
+{
+    "elements": [
+        { "type": "Label", "caption": "Sammelt die Daten der Ladesäulen eines Standorts und liefert sie an die EV Auswertung: geprüfte Zählerstände, Belegung, Leistung und den Live-Stand." },
+        { "type": "ValidationTextBox", "name": "SiteCode", "caption": "Standortkürzel (z. B. ADF, nur Großbuchstaben und Ziffern)", "validate": "^[A-Z0-9]{2,8}$" },
+        { "type": "ValidationTextBox", "name": "SiteName", "caption": "Standortname (z. B. Arensdorf)" },
+        {
+            "type": "Select", "name": "Source", "caption": "Quelle",
+            "options": [
+                { "caption": "EVLM-Instanz (Lastmanagement)", "value": "evlm" },
+                { "caption": "ChargePilot (Ordner mit ModBus-Geräten)", "value": "chargepilot" }
+            ]
+        },
+        { "type": "Label", "caption": "Nach dem Wechsel der Quelle „Übernehmen“ drücken, dann erscheinen die passenden Felder." },
+        { "type": "SelectInstance", "name": "EVLMInstance", "caption": "EVLM-Instanz", "validModules": ["{8C1F2A3B-4D5E-6071-8293-A4B5C6D7E8F9}"] },
+        { "type": "SelectCategory", "name": "CPFolder", "caption": "Ordner mit den ModBus-Geräten des ChargePilot" },
+        { "type": "NumberSpinner", "name": "CPAddressOffset", "caption": "Adressversatz (nur falls die Adressen in Symcon um 1 verschoben eingetragen sind)", "minimum": -1, "maximum": 1 },
+        { "type": "NumberSpinner", "name": "BudgetKw", "caption": "Budget, falls der ChargePilot keine Sicherungsgrenze liefert (0 = aus dem ChargePilot)", "digits": 1, "suffix": " kW" },
+        { "type": "SelectInstance", "name": "Target", "caption": "EV Auswertung, an die geliefert wird", "validModules": ["{FD2A745A-12F8-1A48-40AD-D84F70819EFF}"] },
+        {
+            "type": "ExpansionPanel", "caption": "Feineinstellung", "expanded": false,
+            "items": [
+                { "type": "NumberSpinner", "name": "SampleInterval", "caption": "Messtakt", "suffix": " s", "minimum": 2 },
+                { "type": "NumberSpinner", "name": "LiveInterval", "caption": "Live-Takt", "suffix": " s", "minimum": 5 },
+                { "type": "NumberSpinner", "name": "OfflineAfter", "caption": "Ladepunkt gilt als offline, wenn seine Werte älter sind als", "suffix": " s", "minimum": 20 },
+                { "type": "NumberSpinner", "name": "MaxKw", "caption": "Höchste plausible Leistung je Ladepunkt (für den Zählerfilter)", "digits": 1, "suffix": " kW" }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "List", "name": "PointList", "caption": "Ladepunkte", "rowCount": 6, "add": false, "delete": false,
+            "columns": [
+                { "caption": "Kennung", "name": "Id", "width": "140px" },
+                { "caption": "Säule", "name": "Saeule", "width": "auto" },
+                { "caption": "Ladepunkt", "name": "Name", "width": "160px" }
+            ],
+            "values": []
+        },
+        { "type": "Label", "name": "LastResult", "caption": "Letzte Lieferung: –" },
+        { "type": "Button", "name": "BtnScan", "caption": "Ordner einlesen", "onClick": "EVDS_ScanFolder($id);" },
+        { "type": "Button", "name": "BtnApply", "caption": "Zuordnung übernehmen", "onClick": "EVDS_ApplyScan($id);" },
+        { "type": "Button", "name": "BtnHistory", "caption": "Alte Historie übernehmen", "onClick": "EVDS_ImportHistory($id);" },
+        { "type": "Button", "caption": "Lieferung testen", "onClick": "EVDS_TestDelivery($id);" }
+    ],
+    "status": [
+        { "code": 102, "icon": "active", "caption": "Aktiv" },
+        { "code": 201, "icon": "error", "caption": "Standortkürzel fehlt oder ist ungültig" },
+        { "code": 202, "icon": "error", "caption": "EVLM-Instanz fehlt" },
+        { "code": 203, "icon": "error", "caption": "EV Auswertung fehlt" },
+        { "code": 204, "icon": "inactive", "caption": "ChargePilot: Ordner einlesen und Zuordnung übernehmen" },
+        { "code": 205, "icon": "error", "caption": "ChargePilot meldet eine andere Anzahl Ladepunkte, Aufzeichnung angehalten" }
+    ]
+}

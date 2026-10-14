@@ -1,0 +1,12 @@
+{
+    "id": "{2BA54478-7D6D-155B-129D-20033B7D3C81}",
+    "name": "EVDataCollector",
+    "type": 3,
+    "vendor": "",
+    "aliases": ["EV Datensammler", "Ladesäulen Datensammler"],
+    "url": "",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "EVDS"
+}

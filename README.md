@@ -18,10 +18,10 @@ IPSymconEVLoadManager/
     module.html      Visualisierungs-Kachel (HTML SDK)
   EVDataCollector/   EV Datensammler (Prefix EVDS): liest einen Standort, liefert an die Auswertung
     lib/             Zaehlerlogik, Quellen, Minuten-Datensaetze (ohne Symcon testbar)
+    tools/           ChargePilot-Einrichtung.php: legt Ordner und ModBus-Adressen fuer den Datensammler an
   EVAnalytics/       EV Auswertung (Prefix EVAW): Archiv, Auswertungs-Kachel, CSV-Export
     lib/             Zeitraeume, Belegung, Bericht, Archivzugriff
   tests/             Tests ohne Symcon (php tests/run.php, php tests/sim/run_sim.php)
-  tools/             ChargePilot-Einrichtung.php: legt Ordner und ModBus-Adressen fuer den Datensammler an
 ```
 
 ## Installation

@@ -15,7 +15,7 @@ final class EVSource
     // ChargePilot-Registerblock je Ladepunkt (Doku The Mobility House)
     public const CP_BASE = 12288;
     public const CP_STEP = 256;
-    public const CP_OFFSETS = [40 => 'state', 16 => 'power', 36 => 'energy', 18 => 'cur1', 20 => 'cur2', 22 => 'cur3', 86 => 'set'];
+    public const CP_OFFSETS = [0 => 'cid', 40 => 'state', 16 => 'power', 36 => 'energy', 18 => 'cur1', 20 => 'cur2', 22 => 'cur3', 86 => 'set'];
     public const CP_SITE = [4108 => 'count', 4110 => 'fuseSub', 4112 => 'fuseMain', 1 => 'powerAll'];
     public const CP_REQUIRED = ['state', 'power', 'energy'];
 
@@ -210,7 +210,8 @@ final class EVSource
                 'name' => self::Pretty($b['lp'] !== '' ? $b['lp'] : 'Ladepunkt ' . ($n + 1)), 'block' => $n,
                 'vars' => [
                     'state' => $b['vars']['state'], 'power' => $b['vars']['power'], 'energy' => $b['vars']['energy'],
-                    'cur' => [$b['vars']['cur1'] ?? 0, $b['vars']['cur2'] ?? 0, $b['vars']['cur3'] ?? 0], 'set' => $b['vars']['set'] ?? 0
+                    'cur' => [$b['vars']['cur1'] ?? 0, $b['vars']['cur2'] ?? 0, $b['vars']['cur3'] ?? 0], 'set' => $b['vars']['set'] ?? 0,
+                    'cid' => $b['vars']['cid'] ?? 0
                 ],
                 'maxKw' => 22.1
             ];

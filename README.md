@@ -21,6 +21,7 @@ IPSymconEVLoadManager/
   EVAnalytics/       EV Auswertung (Prefix EVAW): Archiv, Auswertungs-Kachel, CSV-Export
     lib/             Zeitraeume, Belegung, Bericht, Archivzugriff
   tests/             Tests ohne Symcon (php tests/run.php, php tests/sim/run_sim.php)
+  tools/             ChargePilot-Einrichtung.php: legt Ordner und ModBus-Adressen fuer den Datensammler an
 ```
 
 ## Installation

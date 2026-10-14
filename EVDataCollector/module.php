@@ -422,7 +422,9 @@ class EVDataCollector extends IPSModule
         $lines = ['Gefunden: ' . count($devices) . ' ModBus-Geräte, ' . count($scan['points']) . ' vollständige Ladepunkte.'];
         foreach ($scan['points'] as $p) {
             $have = array_keys(array_filter(['Strom' => $p['vars']['cur'][0], 'Soll' => $p['vars']['set']]));
-            $lines[] = '  ' . $p['id'] . '  ' . $p['saeuleName'] . ' / ' . $p['name'] . '  (Status, Leistung, Energie' . ($have ? ', ' . implode(', ', $have) : '') . ')';
+            $cid = !empty($p['vars']['cid']) ? $this->Val($p['vars']['cid']) : null;
+            $lines[] = '  ' . $p['id'] . '  ' . $p['saeuleName'] . ' / ' . $p['name'] . '  (Status, Leistung, Energie' . ($have ? ', ' . implode(', ', $have) : '') . ')'
+                . ($cid ? '  Connector-ID: ' . trim((string) $cid['v']) : '');
         }
         if ($scan['expected'] !== null) {
             $lines[] = 'Der ChargePilot meldet ' . $scan['expected'] . ' Ladepunkte.' . ($scan['expected'] !== $scan['blocks'] ? ' Im Ordner sind ' . $scan['blocks'] . ' angelegt.' : '');

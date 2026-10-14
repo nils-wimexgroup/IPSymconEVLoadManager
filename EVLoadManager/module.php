@@ -42,7 +42,7 @@ class EVLoadManager extends IPSModule
         $this->RegisterTimer('Balance', 0, 'EVLM_Balance($_IPS[\'TARGET\']);');
 
         // HTML-SDK-Kachel aktivieren (ohne dies zeigt Symcon nur die Variablenliste als Text)
-        $this->SetVisualizationType(1);
+        $this->SetVisualizationType(self::VisuType());
     }
 
     public function ApplyChanges()
@@ -50,7 +50,7 @@ class EVLoadManager extends IPSModule
         parent::ApplyChanges();
 
         // HTML-Kachel aktivieren - greift auch bei bestehenden Instanzen, sobald "Uebernehmen" gedrueckt wird
-        $this->SetVisualizationType(1);
+        $this->SetVisualizationType(self::VisuType());
 
         $this->MaintainChargePointVariables();
 
@@ -618,5 +618,13 @@ class EVLoadManager extends IPSModule
             IPS_SetVariableProfileText('EVLM.kWh', '', ' kWh');
             IPS_SetVariableProfileIcon('EVLM.kWh', 'Battery');
         }
+    }
+
+    /**
+     * HTML-Kachel. Ab Symcon 9.1 auch im Vollbild (Typ 2), davor zeigt das Vollbild die Variablen der Instanz.
+     */
+    private static function VisuType(): int
+    {
+        return defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? (int) constant('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') : 1;
     }
 }

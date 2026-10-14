@@ -38,13 +38,13 @@ class EVAnalytics extends IPSModule
         $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->RegisterTimer('Housekeeping', 60 * 1000, 'EVAW_Housekeeping($_IPS[\'TARGET\']);');
 
-        $this->SetVisualizationType(1);
+        $this->SetVisualizationType(self::VisuType());
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
-        $this->SetVisualizationType(1);
+        $this->SetVisualizationType(self::VisuType());
         if (IPS_GetKernelRunlevel() == KR_READY) {
             $this->RegisterCsvHook();
             $this->CheckCounters(false);
@@ -593,5 +593,13 @@ class EVAnalytics extends IPSModule
     private function WriteJson(string $name, array $v)
     {
         $this->WriteAttributeString($name, json_encode($v));
+    }
+
+    /**
+     * HTML-Kachel. Ab Symcon 9.1 auch im Vollbild (Typ 2), davor zeigt das Vollbild die Variablen der Instanz.
+     */
+    private static function VisuType(): int
+    {
+        return defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') ? (int) constant('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN') : 1;
     }
 }

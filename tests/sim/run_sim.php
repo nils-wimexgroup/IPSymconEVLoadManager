@@ -160,6 +160,7 @@ $end = $S + 2 * 86400 + 3600;
 $imported = '';
 $reimport = '';
 $rowsAfterImport = 0;
+$rowsAfterReimport = -1;
 for ($t = $S; $t < $end; $t += 30) {
     S()['now'] = $t;
     $h = ($t - mktime(0, 0, 0, (int) date('n', $t), (int) date('j', $t), (int) date('Y', $t))) / 3600;
@@ -214,6 +215,7 @@ for ($t = $S; $t < $end; $t += 30) {
         $reimport = out(function () use ($mA) {
             $mA->ImportHistory();
         });
+        $rowsAfterReimport = count(S()['logged'][$eVar]);
     }
 }
 
@@ -227,12 +229,19 @@ $eVar = $sites['ADF']['saeulen'][0]['points'][0]['varE'];
 check('Zählervariable wird archiviert', S()['logging'][$eVar] ?? false, true);
 check('Zählervariable hat Aggregation Zähler', S()['aggtype'][$eVar] ?? null, 1);
 check('Historie: Ausreißer verworfen', strpos($imported, '1 Ausreißer verworfen') !== false, true);
-check('Historie: zweiter Lauf verdoppelt nichts', count(array_filter(S()['logged'][$eVar], function ($r) use ($S) {
-    return $r['TimeStamp'] < $S;
-})), 30);
+check('Historie: zweiter Lauf verdoppelt nichts', $rowsAfterReimport, $rowsAfterImport);
+check('Historie: Ausreißer nicht übernommen', count(array_filter(S()['logged'][$eVar], function ($r) use ($S) {
+    return $r['TimeStamp'] < $S && $r['Value'] == 0;
+})), 0);
 check('Historie beginnt 30 Tage vorher', date('d.m.Y', $sites['ADF']['histSince']), date('d.m.Y', $S - 30 * 86400));
 check('Puffer leer', count(json_decode((string) @file_get_contents(IPS_GetKernelDir() . 'EVDataCollector' . DIRECTORY_SEPARATOR . $dsA . '_outbox.json'), true) ?: []), 0);
 check('Live-Stand Regenstauf vorhanden', isset(json_decode(S()['attr'][$evaw]['Live'], true)['RGST']['points']), true);
+
+// bestehende Installation ohne „Nullwerte ignorieren“: Übernehmen repariert und aggregiert neu
+S()['ignoreZeros'][$eVar] = false;
+$mW->ApplyChanges();
+check('Reparatur: Nullwerte werden wieder ignoriert', S()['ignoreZeros'][$eVar], true);
+check('Reparatur: Neuaggregation eingeplant', array_key_exists((string) $eVar, json_decode(S()['attr'][$evaw]['Reagg'], true)), true);
 
 $ask = function (string $ident, array $view) use ($mW, $evaw) {
     S()['viz'][$evaw] = [];

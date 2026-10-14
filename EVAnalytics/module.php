@@ -47,8 +47,52 @@ class EVAnalytics extends IPSModule
         $this->SetVisualizationType(1);
         if (IPS_GetKernelRunlevel() == KR_READY) {
             $this->RegisterCsvHook();
+            $this->CheckCounters(false);
         }
         $this->SetStatus(102);
+    }
+
+    /**
+     * Zählervariablen: Nullwerte und negative Werte aus der Aggregation nehmen und die Variable neu aggregieren.
+     * Ohne $force nur Variablen, denen die Einstellung noch fehlt. Öffentlich: EVAW_RepairCounters($id)
+     */
+    public function RepairCounters()
+    {
+        $n = $this->CheckCounters(true);
+        echo $n . ' Zählervariablen werden neu aggregiert, höchstens zwei je Minute. Danach stimmen die Tageswerte wieder.';
+    }
+
+    private function CheckCounters(bool $force): int
+    {
+        $ac = $this->ArchiveID();
+        if (!$ac) {
+            return 0;
+        }
+        $todo = $this->ReadJson('Reagg');
+        $n = 0;
+        foreach ($this->ReadJson('Sites') as $site) {
+            foreach ($site['saeulen'] ?? [] as $sa) {
+                foreach ($sa['points'] ?? [] as $p) {
+                    $var = (int) ($p['varE'] ?? 0);
+                    if (!$var || !IPS_VariableExists($var)) {
+                        continue;
+                    }
+                    $missing = !AC_GetCounterIgnoreZeros($ac, $var);
+                    if ($missing) {
+                        AC_SetCounterIgnoreZeros($ac, $var, true);
+                    }
+                    if ($missing || $force) {
+                        $todo[(string) $var] = 0;   // sofort beim nächsten Aufräumen
+                        $n++;
+                    }
+                }
+            }
+        }
+        if ($n) {
+            IPS_ApplyChanges($ac);
+            $this->WriteJson('Reagg', $todo);
+        }
+        return $n;
     }
 
     /** Formular mit der Liste der angeschlossenen Standorte */
@@ -511,6 +555,11 @@ class EVAnalytics extends IPSModule
             if ($ac) {
                 AC_SetLoggingStatus($ac, $id, true);
                 AC_SetAggregationType($ac, $id, $aggregation);
+                if ($aggregation === 1) {
+                    // Beim Anlegen landet der Anfangswert 0 im Archiv; ohne diese Einstellung zählte
+                    // der Sprung 0 → Zählerstand als Verbrauch
+                    AC_SetCounterIgnoreZeros($ac, $id, true);
+                }
                 IPS_ApplyChanges($ac);
             }
         }

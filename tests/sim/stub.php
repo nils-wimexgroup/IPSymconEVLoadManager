@@ -188,7 +188,16 @@ namespace Sim {
     }
 
     // ---------------- Archiv (Doku: Zähler summiert nur positive Zuwächse ab dem ersten Wert)
-    function AC_SetLoggingStatus($ac, $var, $on) { S()['logging'][$var] = $on; return true; }
+    function AC_SetLoggingStatus($ac, $var, $on)
+    {
+        if ($on && empty(S()['logging'][$var]) && isset(S()['vars'][$var])) {
+            S()['logged'][$var][] = ['TimeStamp' => S()['now'], 'Value' => S()['vars'][$var]['v']];
+        }
+        S()['logging'][$var] = $on;
+        return true;
+    }
+    function AC_SetCounterIgnoreZeros($ac, $var, $on) { S()['ignoreZeros'][$var] = $on; return true; }
+    function AC_GetCounterIgnoreZeros($ac, $var) { return !empty(S()['ignoreZeros'][$var]); }
     function AC_GetLoggingStatus($ac, $var) { return !empty(S()['logging'][$var]); }
     function AC_SetAggregationType($ac, $var, $t) { S()['aggtype'][$var] = $t; return true; }
     function AC_ReAggregateVariable($ac, $var) { return true; }
@@ -219,6 +228,9 @@ namespace Sim {
         foreach ($all as $x) {
             $d = mktime(0, 0, 0, (int) date('n', $x['TimeStamp']), (int) date('j', $x['TimeStamp']), (int) date('Y', $x['TimeStamp']));
             $v = (float) $x['Value'];
+            if ($counter && !empty(S()['ignoreZeros'][$var]) && $v <= 0) {
+                continue;
+            }
             if ($counter) {
                 $delta = $prev === null ? 0.0 : max(0.0, $v - $prev);
                 $prev = $v;

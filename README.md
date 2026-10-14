@@ -94,6 +94,10 @@ eine Saeule.
 - Kachel mit Zeitraum (Woche, Monat, Jahr, 12 Monate), Auswahl und CSV-Export.
   Der CSV-Link laeuft ueber `/hook/evauswertung/csv` und gilt 5 Minuten.
 - Geschaeftszeiten fuer die Auslastung einstellbar (Standard Mo-Fr 7-18 Uhr).
+- Zaehlervariablen ignorieren Nullwerte in der Aggregation (AC_SetCounterIgnoreZeros), sonst
+  zaehlte der beim Anlegen geloggte Anfangswert 0 den ganzen Zaehlerstand als Verbrauch.
+  Bestehende Variablen werden beim Uebernehmen umgestellt und neu aggregiert; Knopf
+  „Zaehlervariablen neu aggregieren“ fuer den Fall unplausibler Energiewerte.
 
 Oeffentliche Funktionen: `EVDS_Sample`, `EVDS_ScanFolder`, `EVDS_ApplyScan`,
 `EVDS_ImportHistory`, `EVDS_TestDelivery`, `EVAW_Ingest`, `EVAW_Housekeeping`.

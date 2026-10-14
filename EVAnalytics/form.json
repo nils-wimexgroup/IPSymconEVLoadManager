@@ -24,7 +24,8 @@
             ],
             "values": []
         },
-        { "type": "Button", "caption": "Nachgereichte Daten jetzt neu aggregieren", "onClick": "EVAW_Housekeeping($id);" }
+        { "type": "Button", "caption": "Nachgereichte Daten jetzt neu aggregieren", "onClick": "EVAW_Housekeeping($id);" },
+        { "type": "Button", "caption": "Zählervariablen neu aggregieren (bei unplausiblen Energiewerten)", "onClick": "EVAW_RepairCounters($id);" }
     ],
     "status": [
         { "code": 102, "icon": "active", "caption": "Aktiv" }

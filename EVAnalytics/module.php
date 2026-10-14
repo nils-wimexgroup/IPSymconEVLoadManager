@@ -10,8 +10,8 @@ require_once __DIR__ . '/lib/EVArchiveReader.php';
  * -------------------------------
  * Nimmt Minuten-Datensaetze und Live-Staende der EV Datensammler an (lokal per EVAW_Ingest,
  * ab Etappe 2 auch per WebHook), schreibt sie in eigene Archiv-Variablen je Standort und
- * Ladepunkt und zeigt sie in einer HTML-SDK-Kachel aus: Energie, Ladevorgaenge, Auslastung,
- * Heatmap, Leistungsspitzen und CSV-Export.
+ * Ladepunkt und zeigt sie in einer HTML-SDK-Kachel aus: Energie, Ladevorgaenge, Auslastung
+ * (belegt und davon aktiv geladen), Heatmap, Leistungsspitzen und CSV-Export.
  */
 class EVAnalytics extends IPSModule
 {
@@ -47,6 +47,7 @@ class EVAnalytics extends IPSModule
         $this->SetVisualizationType(self::VisuType());
         if (IPS_GetKernelRunlevel() == KR_READY) {
             $this->RegisterCsvHook();
+            $this->UpgradeSites();
             $this->CheckCounters(false);
         }
         $this->SetStatus(102);
@@ -129,6 +130,7 @@ class EVAnalytics extends IPSModule
     {
         if ($Message == IPS_KERNELSTARTED) {
             $this->RegisterCsvHook();
+            $this->UpgradeSites();
         }
     }
 
@@ -224,12 +226,22 @@ class EVAnalytics extends IPSModule
             foreach ($sa['points'] ?? [] as $p) {
                 $pid = (string) $p['id'];
                 $label = $sa['name'] . ' · ' . $p['name'];
-                $o['points'][] = [
+                $identL = $this->Ident($pid) . '_L';
+                $newL = @IPS_GetObjectIDByIdent($identL, $cat) === false;
+                $pt = [
                     'id' => $pid, 'name' => (string) $p['name'],
                     'varE' => $this->EnsureVar($cat, $this->Ident($pid) . '_E', 2, $label . ' · Zähler (geprüft)', 'EVAW.kWh', 1, $pos++),
                     'varB' => $this->EnsureVar($cat, $this->Ident($pid) . '_B', 0, $label . ' · Belegt', '~Switch', 0, $pos++),
-                    'varP' => $this->EnsureVar($cat, $this->Ident($pid) . '_P', 2, $label . ' · Leistung', 'EVAW.kW', 0, $pos++)
+                    'varP' => $this->EnsureVar($cat, $this->Ident($pid) . '_P', 2, $label . ' · Leistung', 'EVAW.kW', 0, $pos++),
+                    'varL' => $this->EnsureVar($cat, $identL, 0, $label . ' · Lädt aktiv', '~Switch', 0, $pos++)
                 ] + (isset($oldPoints[$pid]['histFrom']) ? ['histFrom' => (int) $oldPoints[$pid]['histFrom']] : []);
+                // Ladepunkt mit Daten aus der Zeit vor "Lädt aktiv": beim Aufräumen einmalig nachrechnen (FillCharging)
+                if ($newL && isset($oldPoints[$pid])) {
+                    $pt['lFill'] = time();
+                } elseif (isset($oldPoints[$pid]['lFill'])) {
+                    $pt['lFill'] = (int) $oldPoints[$pid]['lFill'];
+                }
+                $o['points'][] = $pt;
             }
             $out['saeulen'][] = $o;
         }
@@ -260,6 +272,8 @@ class EVAnalytics extends IPSModule
                 $put($p['varE'], $v[0] === null ? null : (float) $v[0]);
                 $put($p['varB'], (bool) $v[1]);
                 $put($p['varP'], (float) $v[2]);
+                // ältere Datensammler liefern kein "lädt aktiv": dann aus Belegt und Leistung
+                $put($p['varL'] ?? 0, isset($v[3]) ? (bool) $v[3] : ((bool) $v[1] && (float) $v[2] >= EVStats::LADEN_KW));
             }
             if (isset($r['s'][$sa['id']])) {
                 $put($sa['varP'], (float) $r['s'][$sa['id']]);
@@ -330,6 +344,7 @@ class EVAnalytics extends IPSModule
 
     private function DoHousekeeping()
     {
+        $this->FillCharging();
         $todo = $this->ReadJson('Reagg');
         $ac = $this->ArchiveID();
         $keep = [];
@@ -357,6 +372,74 @@ class EVAnalytics extends IPSModule
             }
         }
         $this->WriteJson('CsvTokens', $tokens);
+    }
+
+    /** Bestand auf den aktuellen Aufbau bringen, z. B. Variable "Lädt aktiv" für Standorte von vor Version 1.2 */
+    private function UpgradeSites()
+    {
+        $this->Locked(function () {
+            $sites = $this->ReadJson('Sites');
+            $changed = false;
+            foreach ($sites as $code => $site) {
+                foreach ($site['saeulen'] ?? [] as $sa) {
+                    foreach ($sa['points'] ?? [] as $p) {
+                        if (empty($p['varL'])) {
+                            // die gespeicherte Struktur hat alle Felder, die der Datensammler sonst liefert
+                            $sites[$code] = $this->EnsureSite((string) $code, $site, $site);
+                            $changed = true;
+                            continue 3;
+                        }
+                    }
+                }
+            }
+            if ($changed) {
+                $this->WriteJson('Sites', $sites);
+            }
+        });
+    }
+
+    /**
+     * "Lädt aktiv" für die Zeit vor der Variable einmalig aus Belegt und Leistung nachrechnen,
+     * höchstens drei Ladepunkte je Lauf. Den Status des Lastmanagements gibt es rückwirkend nicht,
+     * auch nicht den beim Verbindungsausfall gehaltenen Zustand; solche Minuten zählen hier nicht als geladen.
+     */
+    private function FillCharging()
+    {
+        $sites = $this->ReadJson('Sites');
+        $reader = new EVArchiveReader($this->ArchiveID());
+        $late = [];
+        $done = 0;
+        foreach ($sites as &$site) {
+            foreach ($site['saeulen'] as &$sa) {
+                foreach ($sa['points'] as &$p) {
+                    if (empty($p['lFill']) || $done >= 3) {
+                        continue;
+                    }
+                    $from = (int) $site['detailSince'];
+                    $to = (int) $p['lFill'];
+                    if ($to > $from) {
+                        $rows = EVStats::ChargingFrom(
+                            $reader->Logged((int) $p['varB'], $from, $to), $reader->StateBefore((int) $p['varB'], $from),
+                            $reader->Values((int) $p['varP'], $from, $to), (float) ($reader->ValueBefore((int) $p['varP'], $from) ?? 0.0)
+                        );
+                        if ($rows) {
+                            $late[(int) $p['varL']] = $rows;
+                        }
+                    }
+                    unset($p['lFill']);
+                    $done++;
+                }
+                unset($p);
+            }
+            unset($sa);
+        }
+        unset($site);
+        if ($done) {
+            if ($late) {
+                $this->AddLate($late);
+            }
+            $this->WriteJson('Sites', $sites);
+        }
     }
 
     // ================================================================ Kachel

@@ -41,22 +41,30 @@ final class EVArchiveReader
         return $out;
     }
 
-    /** Geloggte Ja/Nein-Werte aufsteigend; AC_GetLoggedValues liefert höchstens 10.000 Werte je Abfrage */
+    /** Geloggte Ja/Nein-Werte aufsteigend */
     public function Logged(int $varB, int $from, int $to): array
     {
-        if (!$this->ac || $varB <= 0 || !IPS_VariableExists($varB) || $to <= $from) {
+        return array_map(function ($r) {
+            return ['TimeStamp' => $r['TimeStamp'], 'Value' => (bool) $r['Value']];
+        }, $this->Values($varB, $from, $to));
+    }
+
+    /** Geloggte Werte aufsteigend, unverändert; AC_GetLoggedValues liefert höchstens 10.000 Werte je Abfrage */
+    public function Values(int $var, int $from, int $to): array
+    {
+        if (!$this->ac || $var <= 0 || !IPS_VariableExists($var) || $to <= $from) {
             return [];
         }
         $out = [];
         $end = $to - 1;
         for ($guard = 0; $guard < 50; $guard++) {
-            $rows = @AC_GetLoggedValues($this->ac, $varB, $from, $end, 10000);
+            $rows = @AC_GetLoggedValues($this->ac, $var, $from, $end, 10000);
             if (!is_array($rows) || count($rows) == 0) {
                 break;
             }
             $min = PHP_INT_MAX;
             foreach ($rows as $r) {
-                $out[] = ['TimeStamp' => (int) $r['TimeStamp'], 'Value' => (bool) $r['Value']];
+                $out[] = ['TimeStamp' => (int) $r['TimeStamp'], 'Value' => $r['Value']];
                 $min = min($min, (int) $r['TimeStamp']);
             }
             if (count($rows) < 10000 || $min <= $from) {
@@ -73,16 +81,22 @@ final class EVArchiveReader
     /** Zustand unmittelbar vor $ts (letzter Wert der 30 Tage davor) */
     public function StateBefore(int $varB, int $ts): bool
     {
-        if (!$this->ac || $varB <= 0 || !IPS_VariableExists($varB)) {
-            return false;
+        return (bool) $this->ValueBefore($varB, $ts);
+    }
+
+    /** Letzter geloggter Wert der 30 Tage vor $ts, null wenn keiner */
+    public function ValueBefore(int $var, int $ts)
+    {
+        if (!$this->ac || $var <= 0 || !IPS_VariableExists($var)) {
+            return null;
         }
-        $rows = @AC_GetLoggedValues($this->ac, $varB, $ts - 30 * 86400, $ts - 1, 0);
+        $rows = @AC_GetLoggedValues($this->ac, $var, $ts - 30 * 86400, $ts - 1, 0);
         $best = null;
         foreach (is_array($rows) ? $rows : [] as $r) {
             if ($best === null || (int) $r['TimeStamp'] > (int) $best['TimeStamp']) {
                 $best = $r;
             }
         }
-        return $best !== null && (bool) $best['Value'];
+        return $best === null ? null : $best['Value'];
     }
 }

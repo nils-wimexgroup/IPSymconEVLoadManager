@@ -1,12 +1,45 @@
 <?php
 
 /**
- * Belegung, Ladevorgaenge und Heatmap aus geloggten Ja/Nein-Werten (ohne Symcon-Abhaengigkeiten).
+ * Belegung, aktives Laden, Ladevorgaenge und Heatmap aus geloggten Ja/Nein-Werten (ohne Symcon-Abhaengigkeiten).
  * Eingabe: geloggte Werte aufsteigend sortiert, je ['TimeStamp' => int, 'Value' => bool|int],
  * dazu der Zustand unmittelbar vor dem Zeitraum.
  */
 final class EVStats
 {
+    public const LADEN_KW = 0.1;   // ab dieser Leistung gilt ein belegter Ladepunkt als aktiv ladend (gleicher Wert in EVSource)
+
+    /**
+     * Lädt-Zustand aus Belegt und Leistung, für Daten ohne eigenen Lädt-Wert (Nachberechnung, ältere Datensammler).
+     * Aktiv geladen = belegt und Leistung ab LADEN_KW. Werte zum selben Zeitpunkt gelten gemeinsam.
+     * @return array nur die Wechsel, aufsteigend [['TimeStamp' => t, 'Value' => bool], …]
+     */
+    public static function ChargingFrom(array $belegt, bool $b0, array $power, float $p0): array
+    {
+        $at = [];
+        foreach ($belegt as $r) {
+            $at[(int) $r['TimeStamp']]['b'] = (bool) $r['Value'];
+        }
+        foreach ($power as $r) {
+            $at[(int) $r['TimeStamp']]['p'] = (float) $r['Value'];
+        }
+        ksort($at);
+        $b = $b0;
+        $p = $p0;
+        $on = $b && $p >= self::LADEN_KW;
+        $out = [];
+        foreach ($at as $t => $x) {
+            $b = $x['b'] ?? $b;
+            $p = $x['p'] ?? $p;
+            $now = $b && $p >= self::LADEN_KW;
+            if ($now !== $on) {
+                $out[] = ['TimeStamp' => $t, 'Value' => $now];
+                $on = $now;
+            }
+        }
+        return $out;
+    }
+
     /**
      * Belegt-Intervalle innerhalb [$from, $to). Ein Intervall, das vor $from beginnt, wird abgeschnitten.
      * @return array [[start, ende, beganInZeitraum(bool)], …]

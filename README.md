@@ -62,7 +62,7 @@ EVLM_Balance(<InstanceID>);   // eine Regelrunde sofort ausfuehren
 
 ## EV Datensammler und EV Auswertung
 Zwei weitere Module werten die Ladesaeulen ueber laengere Zeit aus: Energie,
-Ladevorgaenge, Auslastung mit Heatmap, Leistungsspitzen gegen Budget bzw.
+Ladevorgaenge, Auslastung (belegt und davon aktiv geladen) mit Heatmap, Leistungsspitzen gegen Budget bzw.
 Saeulen-Limit und CSV-Export, wahlweise fuer alle Standorte, einen Standort oder
 eine Saeule.
 
@@ -89,8 +89,13 @@ eine Saeule.
 
 **EV Auswertung** (eine Instanz, z. B. in der Zentrale)
 - Legt je Standort eine Kategorie mit archivierten Variablen an: je Ladepunkt
-  Zaehler (Aggregation Zaehler), Belegt und Leistung, dazu Leistung je Saeule
-  und Standort.
+  Zaehler (Aggregation Zaehler), Belegt, Leistung und Laedt aktiv, dazu Leistung
+  je Saeule und Standort.
+- Auslastung: belegt = Fahrzeug angesteckt; davon aktiv geladen = Status „Laedt“
+  wie im Lastmanagement und mindestens 0,1 kW. Beides haelt der Datensammler bei
+  kurzen Verbindungsausfaellen. Fuer Daten von vor Version 1.2 rechnet die
+  Auswertung „aktiv geladen“ einmalig aus Belegt und Leistung nach (beim
+  Uebernehmen vorgemerkt, beim Aufraeumen drei Ladepunkte je Minute).
 - Kachel mit Zeitraum (Woche, Monat, Jahr, 12 Monate), Auswahl und CSV-Export.
   Der CSV-Link laeuft ueber `/hook/evauswertung/csv` und gilt 5 Minuten.
 - Geschaeftszeiten fuer die Auslastung einstellbar (Standard Mo-Fr 7-18 Uhr).

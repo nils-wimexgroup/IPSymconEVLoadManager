@@ -42,6 +42,7 @@ class EVDataCollector extends IPSModule
         $this->RegisterAttributeString('CPScan', '{}');     // zuletzt eingelesene, noch nicht übernommene Zuordnung
         $this->RegisterAttributeString('Counters', '{}');
         $this->RegisterAttributeString('Belegt', '{}');
+        $this->RegisterAttributeString('Laden', '{}');
         $this->RegisterAttributeString('Minute', '{}');
         $this->RegisterAttributeInteger('Seq', 0);
         $this->RegisterAttributeString('LastModes', '{}');
@@ -101,6 +102,7 @@ class EVDataCollector extends IPSModule
         }
         $counters = $this->ReadJson('Counters');
         $belegt = $this->ReadJson('Belegt');
+        $laden = $this->ReadJson('Laden');
         $maxKw = $this->ReadPropertyFloat('MaxKw');
         $samples = [];
         $modes = [];
@@ -118,17 +120,19 @@ class EVDataCollector extends IPSModule
                 }
             }
             $counters[$p['id']] = $c;
-            // offline = Zustand unbekannt: letzten bekannten Belegt-Zustand halten, sonst zählte das Ende
-            // eines kurzen Ausfalls als neuer Ladevorgang
+            // offline = Zustand unbekannt: letzten bekannten Belegt- und Lädt-Zustand halten, sonst zählte
+            // das Ende eines kurzen Ausfalls als neuer Ladevorgang
             if (!$p['offline']) {
                 $belegt[$p['id']] = EVSource::IsBelegt($p['mode']);
+                $laden[$p['id']] = EVSource::IsCharging($p['mode'], (float) $p['kw']);
             }
             $samples[] = ['id' => $p['id'], 'saeule' => $p['saeule'], 'kw' => $p['kw'], 'belegt' => (bool) ($belegt[$p['id']] ?? false),
-                'counter' => $c['out'] ?? null];
+                'laden' => (bool) ($laden[$p['id']] ?? false), 'counter' => $c['out'] ?? null];
             $modes[$p['id']] = $p['mode'];
         }
         $this->WriteJson('Counters', $counters);
         $this->WriteJson('Belegt', $belegt);
+        $this->WriteJson('Laden', $laden);
 
         if (!$data['hold']) {
             $seq = $this->ReadAttributeInteger('Seq');

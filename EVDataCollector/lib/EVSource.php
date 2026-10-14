@@ -11,6 +11,7 @@
 final class EVSource
 {
     public const VOLT = 230.0;
+    public const LADEN_KW = 0.1;   // ab dieser Leistung gilt ein belegter Ladepunkt als aktiv ladend (gleicher Wert in EVStats)
 
     // ChargePilot-Registerblock je Ladepunkt (Doku The Mobility House)
     public const CP_BASE = 12288;
@@ -71,6 +72,15 @@ final class EVSource
     public static function IsBelegt(string $mode): bool
     {
         return $mode === 'bereit' || $mode === 'laden';
+    }
+
+    /**
+     * Aktiv geladen: Status "lädt" (wie im Lastmanagement) und es fließt tatsächlich Leistung.
+     * Der Status allein reicht nicht, manche Fahrzeuge bleiben z. B. mit vollem Akku in C2.
+     */
+    public static function IsCharging(string $mode, float $kw): bool
+    {
+        return $mode === 'laden' && $kw >= self::LADEN_KW;
     }
 
     // ------------------------------------------------------------ EVLM

@@ -73,3 +73,22 @@ check('Geschäftszeit eines Tages', EVStats::BizWindowSeconds($from, $to, 7, 18)
 check('Geschäftszeit einer Woche', EVStats::BizWindowSeconds($from, EVPeriod::AddDays($from, 7), 7, 18), 5 * 11 * 3600);
 check('Wochentage in KW 42', EVStats::WeekdayCounts($from, EVPeriod::AddDays($from, 7)), [1, 1, 1, 1, 1, 1, 1]);
 check('Intervalle: Anfangszustand belegt ohne Werte', EVStats::Intervals([], true, $from, $to), [[$from, $to, false]]);
+
+// ---- Aktiv geladen aus Belegt und Leistung (Nachberechnung) ----
+$bl = [
+    ['TimeStamp' => 100, 'Value' => true],
+    ['TimeStamp' => 400, 'Value' => false],
+];
+$pl = [
+    ['TimeStamp' => 160, 'Value' => 11.0],
+    ['TimeStamp' => 280, 'Value' => 0.05],   // unter 0,1 kW: nur noch belegt
+    ['TimeStamp' => 340, 'Value' => 3.0],
+    ['TimeStamp' => 400, 'Value' => 2.0],    // gleicher Zeitpunkt wie "frei": zählt nicht mehr
+    ['TimeStamp' => 460, 'Value' => 0.0],
+];
+check('Laden: Wechsel aus Belegt und Leistung', EVStats::ChargingFrom($bl, false, $pl, 0.0), [
+    ['TimeStamp' => 160, 'Value' => true], ['TimeStamp' => 280, 'Value' => false],
+    ['TimeStamp' => 340, 'Value' => true], ['TimeStamp' => 400, 'Value' => false],
+]);
+check('Laden: Anfangszustand lädt schon', EVStats::ChargingFrom([], true, [['TimeStamp' => 50, 'Value' => 0.0]], 7.0), [['TimeStamp' => 50, 'Value' => false]]);
+check('Laden: Schwelle 0,1 kW zählt', EVStats::ChargingFrom([], true, [['TimeStamp' => 50, 'Value' => 0.1]], 0.0), [['TimeStamp' => 50, 'Value' => true]]);

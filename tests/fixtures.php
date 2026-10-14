@@ -45,13 +45,13 @@ $meta = [
     'ADF' => ['name' => 'Arensdorf', 'sourceLabel' => 'EVLM', 'budgetKw' => 13.8, 'varP' => 501,
         'histSince' => mktime(0, 0, 0, 1, 1, 2025), 'detailSince' => mktime(0, 0, 0, 10, 1, 2026),
         'saeulen' => [['id' => 'ADF-LS01', 'name' => 'Säule 1', 'limitKw' => 13.8, 'varP' => 401, 'points' => [
-            ['id' => 'ADF-LS01-1', 'name' => 'links', 'varE' => 101, 'varB' => 201, 'varP' => 301],
-            ['id' => 'ADF-LS01-2', 'name' => 'rechts', 'varE' => 102, 'varB' => 202, 'varP' => 302]]]]],
+            ['id' => 'ADF-LS01-1', 'name' => 'links', 'varE' => 101, 'varB' => 201, 'varP' => 301, 'varL' => 251],
+            ['id' => 'ADF-LS01-2', 'name' => 'rechts', 'varE' => 102, 'varB' => 202, 'varP' => 302, 'varL' => 252]]]]],
     'RGST' => ['name' => 'Regenstauf', 'sourceLabel' => 'ChargePilot', 'budgetKw' => 22.1, 'varP' => 511,
         'note' => 'Regenstauf: ChargePilot per Modbus über VPN.',
         'histSince' => mktime(0, 0, 0, 10, 5, 2026), 'detailSince' => mktime(0, 0, 0, 10, 5, 2026),
         'saeulen' => [['id' => 'RGST-LS01', 'name' => 'Säule 1', 'limitKw' => null, 'varP' => 411, 'points' => [
-            ['id' => 'RGST-LS01-1', 'name' => 'links', 'varE' => 111, 'varB' => 211, 'varP' => 311]]]]],
+            ['id' => 'RGST-LS01-1', 'name' => 'links', 'varE' => 111, 'varB' => 211, 'varP' => 311, 'varL' => 261]]]]],
 ];
 $r = new StubReader();
 for ($d = mktime(0, 0, 0, 1, 1, 2025); $d <= EVPeriod::Day0($now); $d = EVPeriod::AddDays($d, 1)) {
@@ -66,9 +66,13 @@ for ($d = mktime(0, 0, 0, 1, 1, 2025); $d <= EVPeriod::Day0($now); $d = EVPeriod
         $r->max[401][$d] = $d === mktime(0, 0, 0, 10, 2, 2026) ? 13.8 : 7.0;
         $r->logs[201][] = ['TimeStamp' => $d + 8 * 3600, 'Value' => true];
         $r->logs[201][] = ['TimeStamp' => $d + 12 * 3600, 'Value' => false];
+        $r->logs[251][] = ['TimeStamp' => $d + 8 * 3600, 'Value' => true];     // lädt die ersten 2 der 4 belegten Stunden
+        $r->logs[251][] = ['TimeStamp' => $d + 10 * 3600, 'Value' => false];
     }
     if ($d >= mktime(0, 0, 0, 10, 5, 2026)) {
         $r->logs[211][] = ['TimeStamp' => $d + 9 * 3600, 'Value' => true];
         $r->logs[211][] = ['TimeStamp' => $d + 10 * 3600, 'Value' => false];
+        $r->logs[261][] = ['TimeStamp' => $d + 9 * 3600, 'Value' => true];     // lädt eine halbe Stunde
+        $r->logs[261][] = ['TimeStamp' => $d + 9 * 3600 + 1800, 'Value' => false];
     }
 }

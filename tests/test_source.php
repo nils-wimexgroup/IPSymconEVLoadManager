@@ -62,13 +62,16 @@ check('ChargePilot: Standort-Register', $scan['site'], ['count' => 901, 'fuseMai
 check('ChargePilot: Hinweise (RFID ignoriert, Energie fehlt bei Säule 2)', count($scan['issues']), 2);
 check('ChargePilot: Watt werden zu kW', EVSource::PowerKw(7400), 7.4);
 check('ChargePilot: kW bleiben kW', EVSource::PowerKw(7.4), 7.4);
+check('Lädt aktiv: Status laden mit Leistung', EVSource::IsCharging('laden', 0.1), true);
+check('Lädt aktiv: Status laden ohne Leistung (z. B. Akku voll in C2)', EVSource::IsCharging('laden', 0.05), false);
+check('Lädt aktiv: bereit mit Messrauschen', EVSource::IsCharging('bereit', 3.0), false);
 
 // ---- Minuten-Datensätze ----
 $t0 = mktime(10, 0, 5, 10, 14, 2026);
 $smp = function ($kw1, $b1, $e1, $kw2) {
     return [
-        ['id' => 'A-LS01-1', 'saeule' => 'A-LS01', 'kw' => $kw1, 'belegt' => $b1, 'counter' => $e1],
-        ['id' => 'A-LS01-2', 'saeule' => 'A-LS01', 'kw' => $kw2, 'belegt' => $kw2 > 0, 'counter' => 50.0],
+        ['id' => 'A-LS01-1', 'saeule' => 'A-LS01', 'kw' => $kw1, 'belegt' => $b1, 'laden' => $b1 && $kw1 > 0, 'counter' => $e1],
+        ['id' => 'A-LS01-2', 'saeule' => 'A-LS01', 'kw' => $kw2, 'belegt' => $kw2 > 0, 'laden' => $kw2 > 0, 'counter' => 50.0],
     ];
 };
 [$acc, $rec] = EVMinute::Add([], $t0, $smp(7.0, true, 100.0, 0.0), 1);
@@ -81,3 +84,6 @@ check('Minute: letzter Zählerstand', $rec['p']['A-LS01-1'][0], 100.1);
 check('Minute: Säule max (gleichzeitig)', $rec['s']['A-LS01'], 15.0);
 check('Minute: Standort max', $rec['site'], 15.0);
 check('Minute: belegt', $rec['p']['A-LS01-2'][1], 1);
+check('Minute: lädt aktiv (letzter Stand der Minute)', $rec['p']['A-LS01-2'][3], 1);
+[$acc2, $rec2] = EVMinute::Add(['t' => mktime(9, 59, 0, 10, 14, 2026), 'p' => ['A-LS01-1' => ['sum' => 5.0, 'n' => 1, 'b' => 1, 'e' => 99.0]], 's' => [], 'site' => 5.0], $t0, [], 1);
+check('Minute: Zwischenstand von vor dem Update ohne Lädt-Wert', $rec2['p']['A-LS01-1'][3], 0);

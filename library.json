@@ -3,8 +3,8 @@
     "author": "Nils Rudolph",
     "name": "EV Lastmanagement",
     "url": "",
-    "version": "1.1",
-    "build": 8,
+    "version": "1.2",
+    "build": 9,
     "date": 1791936000,
     "compatibility": {
         "base": "7.0"

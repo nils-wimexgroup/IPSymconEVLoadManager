@@ -53,6 +53,10 @@
     .ev-kpi .v small { font-size: 13px; font-weight: 400; color: var(--ev-muted); margin-left: 3px; }
     .ev-kpi .s { font-size: 11px; color: var(--ev-muted); margin-top: 2px; }
     .ev-kpi .s b { color: var(--ev-text); }
+    .ev-occ { position: relative; height: 6px; border-radius: 3px; background: var(--ev-line); overflow: hidden; margin-top: 6px; }
+    .ev-occ i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--ev-laden); opacity: .35; }
+    .ev-occ i.l { opacity: 1; }
+    .ev-seg.sm button { padding: 3px 8px; font-size: 11px; }
     .ev-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
     .ev.wide .ev-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .ev.wide .ev-grid .full { grid-column: 1 / -1; }
@@ -85,7 +89,7 @@
     .ev-site .v { font-size: 12px; text-align: right; white-space: nowrap; }
     .ev-site .s { grid-column: 2 / -1; font-size: 11px; color: var(--ev-muted); }
     .ev-tbl { overflow-x: auto; }
-    .ev-tbl table { border-collapse: collapse; width: 100%; min-width: 620px; }
+    .ev-tbl table { border-collapse: collapse; width: 100%; min-width: 690px; }
     .ev-tbl th { font-size: 11px; font-weight: normal; color: var(--ev-muted); text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--ev-line); white-space: nowrap; cursor: pointer; user-select: none; }
     .ev-tbl th:first-child, .ev-tbl td:first-child { text-align: left; }
     .ev-tbl th[aria-sort] { color: var(--ev-text); }
@@ -146,7 +150,13 @@
             <div class="ev-chart" id="ev_energy"></div>
         </section>
         <section class="ev-card">
-            <div class="ev-ch"><h4>Belegung nach Wochentag und Uhrzeit</h4><span class="m" id="ev_hmeta"></span></div>
+            <div class="ev-ch">
+                <h4 id="ev_htitle">Belegung nach Wochentag und Uhrzeit</h4>
+                <div class="ev-seg sm" id="ev_hseg" role="group" aria-label="Heatmap zeigt">
+                    <button type="button" data-h="b">Belegt</button>
+                    <button type="button" data-h="l">Lädt aktiv</button>
+                </div>
+            </div>
             <div class="ev-chart" id="ev_heat"></div>
             <div class="ev-leg" id="ev_hleg"></div>
         </section>
@@ -171,6 +181,7 @@
         // eigene Kennung: Antworten des Moduls gehen an alle offenen Kacheln, angenommen werden nur die eigenen
         var cid = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
         var sort = { col: 'kwh', dir: -1 };
+        var heatMode = 'b';   // Heatmap: b = belegt, l = aktiv geladen
         var NF0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
         var NF1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         var WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -302,11 +313,17 @@
             var cards = [
                 { l: 'Energie', v: kwh(k.kwh), u: 'kWh', s: ch },
                 { l: 'Ladevorgänge', v: k.ses == null ? '–' : NF0.format(k.ses), u: '', s: k.ses == null ? noDet : (k.ses ? 'Ø <b>' + kwh(k.avgKwh) + ' kWh</b> · Ø ' + dur(k.avgDur) : 'keine im Zeitraum') },
-                { l: 'Auslastung', v: k.occ == null ? '–' : NF0.format(k.occ * 100), u: k.occ == null ? '' : '%', s: k.occ == null ? noDet : 'Mo–Fr ' + d.biz.from + '–' + d.biz.to + ' Uhr: <b>' + pct(k.bizOcc) + '</b>' },
+                {
+                    l: 'Auslastung', v: k.occ == null ? '–' : NF0.format(k.occ * 100), u: k.occ == null ? '' : '%',
+                    t: 'Belegt: Fahrzeug angesteckt. Aktiv geladen: Status „Lädt“ und mindestens 0,1 kW.',
+                    bar: k.occ == null || k.load == null ? '' : '<div class="ev-occ" aria-hidden="true"><i style="width:' + (k.occ * 100).toFixed(1) + '%"></i><i class="l" style="width:' + (k.load * 100).toFixed(1) + '%"></i></div>',
+                    s: k.occ == null ? noDet : (k.load == null ? '' : 'davon aktiv geladen <b>' + pct(k.load) + '</b><br>') +
+                        'Mo–Fr ' + d.biz.from + '–' + d.biz.to + ' Uhr: <b>' + pct(k.bizOcc) + '</b>' + (k.bizLoad == null ? '' : ' · lädt <b>' + pct(k.bizLoad) + '</b>')
+                },
                 { l: 'Höchste Leistung', v: k.peak == null ? '–' : NF1.format(k.peak), u: k.peak == null ? '' : 'kW', s: peakSub }
             ];
             $('ev_kpis').innerHTML = cards.map(function (c) {
-                return '<div class="ev-kpi"><div class="l">' + c.l + '</div><div class="v num">' + c.v + (c.u ? '<small>' + c.u + '</small>' : '') + '</div><div class="s">' + c.s + '</div></div>';
+                return '<div class="ev-kpi"' + (c.t ? ' title="' + esc(c.t) + '"' : '') + '><div class="l">' + c.l + '</div><div class="v num">' + c.v + (c.u ? '<small>' + c.u + '</small>' : '') + '</div>' + (c.bar || '') + '<div class="s">' + c.s + '</div></div>';
             }).join('');
         }
 
@@ -365,18 +382,22 @@
         }
 
         function renderHeat(d) {
-            var el = $('ev_heat'), leg = $('ev_hleg');
-            $('ev_hmeta').textContent = 'Ø über ' + d.scope.points + ' Ladepunkte';
+            var el = $('ev_heat'), leg = $('ev_hleg'), seg = $('ev_hseg');
+            var gl = d.heat.gridL, mode = gl ? heatMode : 'b';
+            seg.hidden = !gl;
+            Array.prototype.forEach.call(seg.children, function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-h') === mode)); });
+            $('ev_htitle').textContent = mode === 'l' ? 'Aktives Laden nach Wochentag und Uhrzeit' : 'Belegung nach Wochentag und Uhrzeit';
             if (!d.heat.days) { el.innerHTML = '<div class="ev-empty">Belegung gibt es erst ab ' + dmy(d.source.setup) + '.</div>'; leg.innerHTML = ''; return; }
+            var G = mode === 'l' ? gl : d.heat.grid;
             var W = Math.max(260, el.clientWidth), L = 24, T = 2, gap = 2, cw = (W - L) / 24, chh = 18, H = T + 7 * (chh + gap) + 16;
-            var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" height="' + H + '" role="img" aria-label="Belegung nach Wochentag und Stunde">';
+            var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" height="' + H + '" role="img" aria-label="' + (mode === 'l' ? 'Aktives Laden' : 'Belegung') + ' nach Wochentag und Stunde">';
             var idx = 0, cells = [];
             for (var w = 0; w < 7; w++) {
                 var yy = T + w * (chh + gap);
                 s += '<text x="0" y="' + (yy + 12) + '">' + WD[w] + '</text>';
                 for (var h = 0; h < 24; h++) {
-                    var v = d.heat.grid[w][h], x = L + h * cw;
-                    cells.push({ w: w, h: h, v: v });
+                    var v = G[w][h], x = L + h * cw;
+                    cells.push({ w: w, h: h, b: d.heat.grid[w][h], l: gl ? gl[w][h] : null });
                     if (v == null) s += '<rect x="' + x + '" y="' + yy + '" width="' + (cw - gap) + '" height="' + chh + '" rx="2" style="fill:none;stroke:var(--ev-line)"/>';
                     else s += '<rect x="' + x + '" y="' + yy + '" width="' + (cw - gap) + '" height="' + chh + '" rx="2" style="fill:var(--ev-laden)" fill-opacity="' + (0.06 + 0.9 * Math.min(1, v)).toFixed(3) + '"/>';
                     s += '<rect class="hit" data-i="' + (idx++) + '" x="' + x + '" y="' + yy + '" width="' + cw + '" height="' + (chh + gap) + '"/>';
@@ -386,10 +407,12 @@
             el.innerHTML = s + '</svg>';
             hover(el, function (i) {
                 var c = cells[i]; if (!c) return '';
-                return '<b>' + WD[c.w] + ', ' + c.h + '–' + (c.h + 1) + ' Uhr</b>' + (c.v == null ? 'keine Daten' : pct(c.v) + ' belegt');
+                if (c.b == null) return '<b>' + WD[c.w] + ', ' + c.h + '–' + (c.h + 1) + ' Uhr</b>keine Daten';
+                return '<b>' + WD[c.w] + ', ' + c.h + '–' + (c.h + 1) + ' Uhr</b><div class="r"><span>belegt</span><span>' + pct(c.b) + '</span></div>' +
+                    (c.l == null ? '' : '<div class="r"><span>davon lädt aktiv</span><span>' + pct(c.l) + '</span></div>');
             });
-            leg.innerHTML = '<span>0 %<span class="ev-ramp">' + [0, .25, .5, .75, 1].map(function (v) { return '<i style="background:var(--ev-laden);opacity:' + (0.06 + 0.9 * v).toFixed(2) + '"></i>'; }).join('') + '</span>100 % belegt</span>' +
-                '<span>Ø über ' + d.heat.days + ' Tage</span>';
+            leg.innerHTML = '<span>0 %<span class="ev-ramp">' + [0, .25, .5, .75, 1].map(function (v) { return '<i style="background:var(--ev-laden);opacity:' + (0.06 + 0.9 * v).toFixed(2) + '"></i>'; }).join('') + '</span>100 % ' + (mode === 'l' ? 'lädt aktiv' : 'belegt') + '</span>' +
+                '<span>Ø über ' + d.scope.points + ' Ladepunkte und ' + d.heat.days + ' Tage</span>';
         }
 
         function renderTable(d) {
@@ -398,7 +421,7 @@
             $('ev_tmeta').textContent = lvl === 'saeule' ? 'Spaltenkopf anklicken zum Sortieren' : 'Zeile anklicken für Details · Spaltenkopf zum Sortieren';
             var cols = [
                 { k: 'label', l: lvl === 'all' ? 'Standort' : 'Ladepunkt' }, { k: 'kwh', l: 'Energie' }, { k: 'share', l: 'Anteil' }, { k: 'ses', l: 'Ladevorgänge' },
-                { k: 'avgKwh', l: 'Ø kWh' }, { k: 'avgDur', l: 'Ø Dauer' }, { k: 'occ', l: 'Auslastung' }
+                { k: 'avgKwh', l: 'Ø kWh' }, { k: 'avgDur', l: 'Ø Dauer' }, { k: 'occ', l: 'Auslastung' }, { k: 'load', l: 'davon lädt' }
             ];
             var total = d.rows.reduce(function (a, p) { return a + p.kwh; }, 0);
             var maxK = Math.max.apply(null, d.rows.map(function (p) { return p.kwh; }).concat([0])) || 1;
@@ -417,10 +440,10 @@
                 return '<tr' + (p.drill ? ' data-drill="' + esc(p.drill) + '" tabindex="0"' : '') + '><td class="lp"><b>' + esc(p.label) + (p.drill ? '<span class="go">›</span>' : '') + '</b>' + (p.sub ? '<span>' + esc(p.sub) + '</span>' : '') + '</td>' +
                     '<td>' + kwh(p.kwh) + ' kWh<span class="ev-bar"><i style="width:' + (p.kwh / maxK * 100).toFixed(1) + '%"></i></span></td>' +
                     '<td>' + pct(p.share) + '</td><td>' + na(p.ses, NF0.format) + '</td><td>' + na(p.avgKwh, kwh) + '</td>' +
-                    '<td>' + na(p.avgDur, dur) + '</td><td>' + na(p.occ, pct) + '</td></tr>';
+                    '<td>' + na(p.avgDur, dur) + '</td><td>' + na(p.occ, pct) + '</td><td>' + na(p.load, pct) + '</td></tr>';
             }).join('');
             var k = d.kpi;
-            var foot = '<tr><td>Summe</td><td>' + kwh(total) + ' kWh</td><td>100 %</td><td>' + na(k.ses, NF0.format) + '</td><td>' + na(k.avgKwh, kwh) + '</td><td>' + na(k.avgDur, dur) + '</td><td>' + na(k.occ, pct) + '</td></tr>';
+            var foot = '<tr><td>Summe</td><td>' + kwh(total) + ' kWh</td><td>100 %</td><td>' + na(k.ses, NF0.format) + '</td><td>' + na(k.avgKwh, kwh) + '</td><td>' + na(k.avgDur, dur) + '</td><td>' + na(k.occ, pct) + '</td><td>' + na(k.load, pct) + '</td></tr>';
             $('ev_table').innerHTML = '<table><thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody><tfoot>' + foot + '</tfoot></table>';
         }
 
@@ -443,6 +466,7 @@
         $('ev_prev').addEventListener('click', function () { setView({ off: view.off - 1 }); });
         $('ev_next').addEventListener('click', function () { if (view.off < 0) setView({ off: view.off + 1 }); });
         $('ev_scope').addEventListener('change', function () { setView({ scope: this.value }); });
+        $('ev_hseg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && data) { heatMode = b.getAttribute('data-h'); tip.hidden = true; renderHeat(data); } });
         $('ev_csv').addEventListener('click', function () { var p = $('ev_csvp'); p.hidden = !p.hidden; this.setAttribute('aria-expanded', String(!p.hidden)); });
         $('ev_csvmake').addEventListener('click', function () {
             var r = root.querySelector('input[name="ev_csvmode"]:checked');

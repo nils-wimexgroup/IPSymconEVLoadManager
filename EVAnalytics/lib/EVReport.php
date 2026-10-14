@@ -7,7 +7,8 @@
  *   [ 'ADF' => [ 'name' => 'Arensdorf', 'sourceLabel' => 'EVLM', 'budgetKw' => 13.8|null,
  *                'histSince' => ts, 'detailSince' => ts, 'varP' => id,
  *                'saeulen' => [ [ 'id' => 'ADF-LS01', 'name' => 'Säule 1', 'limitKw' => 13.8|null, 'varP' => id,
- *                                 'points' => [ [ 'id' => 'ADF-LS01-1', 'name' => 'links', 'varE' => id, 'varB' => id, 'varP' => id ] ] ] ] ] ]
+ *                                 'points' => [ [ 'id' => 'ADF-LS01-1', 'name' => 'links', 'varE' => id, 'varB' => id, 'varP' => id,
+ *                                                 'varL' => id (lädt aktiv, fehlt bei Altbestand) ] ] ] ] ] ]
  *
  * $reader = Objekt mit den Methoden (im Modul ueber AC_*, im Test mit erfundenen Daten):
  *   DailyEnergy(int $varE, int $from, int $to): array  [Tagesbeginn => kWh]
@@ -98,15 +99,18 @@ final class EVReport
         return $to > $a ? $reader->DailyEnergy((int) $p['varE'], $a, $to) : [];
     }
 
-    /** Belegt-Intervalle eines Ladepunkts im Zeitraum, begrenzt auf die Zeit mit eigenen Daten */
-    private static function intervals($reader, array $p, int $from, int $to): array
+    /**
+     * Belegt-Intervalle (bzw. Lädt-Intervalle mit $var = 'varL') eines Ladepunkts im Zeitraum,
+     * begrenzt auf die Zeit mit eigenen Daten. Beide nutzen dasselbe Zeitfenster.
+     */
+    private static function intervals($reader, array $p, int $from, int $to, string $var = 'varB'): array
     {
         $a = max($from, $p['detailSince']);
-        if ($p['detailSince'] <= 0 || $to <= $a) {
+        if ($p['detailSince'] <= 0 || $to <= $a || empty($p[$var])) {
             return [[], 0, 0];
         }
-        $log = $reader->Logged((int) $p['varB'], $a, $to);
-        $iv = EVStats::Intervals($log, $reader->StateBefore((int) $p['varB'], $a), $a, $to);
+        $log = $reader->Logged((int) $p[$var], $a, $to);
+        $iv = EVStats::Intervals($log, $reader->StateBefore((int) $p[$var], $a), $a, $to);
         return [$iv, $a, $to];
     }
 
@@ -160,13 +164,17 @@ final class EVReport
         }
         $acc = [];
         $heatSec = array_fill(0, 7, array_fill(0, 24, 0));
+        $heatSecL = array_fill(0, 7, array_fill(0, 24, 0));
         $heatDays = array_fill(0, 7, 0);
+        $hasLoad = false;
         $bizBusy = 0;
         $bizWin = 0;
+        $bizLoad = 0;
+        $bizWinL = 0;
         $detailDaySet = [];
         foreach ($pts as $k => $p) {
             $g = $groupOf($p);
-            $a = ['kwh' => 0.0, 'kwhDetail' => 0.0, 'ses' => 0, 'busy' => 0, 'obs' => 0];
+            $a = ['kwh' => 0.0, 'kwhDetail' => 0.0, 'ses' => 0, 'busy' => 0, 'obs' => 0, 'load' => 0, 'lobs' => 0];
             foreach (self::energyDays($reader, $p, $P['start'], $end) as $day => $kwh) {
                 $i = self::bucketOf($P['buckets'], (int) $day);
                 if ($i === null) {
@@ -202,7 +210,22 @@ final class EVReport
                     $heatDays[$w] += $n;   // Summe über Ladepunkte = Nenner der Heatmap
                 }
                 $bizBusy += EVStats::BizSeconds($hs, $biz['from'], $biz['to']);
-                $bizWin += EVStats::BizWindowSeconds($from, $to, $biz['from'], $biz['to']);
+                $win = EVStats::BizWindowSeconds($from, $to, $biz['from'], $biz['to']);
+                $bizWin += $win;
+                if (!empty($p['varL'])) {
+                    [$ivL] = self::intervals($reader, $p, $P['start'], $end, 'varL');
+                    $hasLoad = true;
+                    $a['load'] = EVStats::Seconds($ivL);
+                    $a['lobs'] = $a['obs'];
+                    $hsL = EVStats::HourSeconds($ivL);
+                    foreach ($hsL as $w => $row) {
+                        foreach ($row as $h => $sec) {
+                            $heatSecL[$w][$h] += $sec;
+                        }
+                    }
+                    $bizLoad += EVStats::BizSeconds($hsL, $biz['from'], $biz['to']);
+                    $bizWinL += $win;
+                }
                 for ($d = EVPeriod::Day0($from); $d < $to; $d = EVPeriod::AddDays($d, 1)) {
                     $detailDaySet[$d] = true;
                     $i = self::bucketOf($P['buckets'], $d);
@@ -285,7 +308,7 @@ final class EVReport
 
         // ---- Tabelle
         $sum = function (array $keys) use ($acc) {
-            $o = ['kwh' => 0.0, 'kwhDetail' => 0.0, 'ses' => 0, 'busy' => 0, 'obs' => 0];
+            $o = ['kwh' => 0.0, 'kwhDetail' => 0.0, 'ses' => 0, 'busy' => 0, 'obs' => 0, 'load' => 0, 'lobs' => 0];
             foreach ($keys as $k) {
                 foreach ($o as $f => $_) {
                     $o[$f] += $acc[$k][$f];
@@ -301,6 +324,7 @@ final class EVReport
                 'avgKwh' => $o['ses'] ? round($o['kwhDetail'] / $o['ses'], 3) : null,
                 'avgDur' => $o['ses'] ? round($o['busy'] / 3600 / $o['ses'], 3) : null,
                 'occ' => $has ? round($o['busy'] / $o['obs'], 4) : null,
+                'load' => $o['lobs'] > 0 ? round($o['load'] / $o['lobs'], 4) : null,
                 'drill' => $drill
             ];
         };
@@ -331,14 +355,18 @@ final class EVReport
             }
         }
 
-        // ---- Heatmap
+        // ---- Heatmap (belegt und aktiv geladen, gleicher Nenner)
         $grid = [];
+        $gridL = [];
         for ($w = 0; $w < 7; $w++) {
             $r = [];
+            $rl = [];
             for ($h = 0; $h < 24; $h++) {
                 $r[] = $heatDays[$w] > 0 ? round($heatSec[$w][$h] / ($heatDays[$w] * 3600), 4) : null;
+                $rl[] = $heatDays[$w] > 0 ? round($heatSecL[$w][$h] / ($heatDays[$w] * 3600), 4) : null;
             }
             $grid[] = $r;
+            $gridL[] = $rl;
         }
 
         $crumbs = [['l' => 'Alle Standorte', 'v' => 'all']];
@@ -365,10 +393,12 @@ final class EVReport
                 'avgDur' => $T['ses'] ? round($T['busy'] / 3600 / $T['ses'], 3) : null,
                 'occ' => $hasDetail ? round($T['busy'] / $T['obs'], 4) : null,
                 'bizOcc' => $bizWin > 0 ? round($bizBusy / $bizWin, 4) : null,
+                'load' => $T['lobs'] > 0 ? round($T['load'] / $T['lobs'], 4) : null,
+                'bizLoad' => $bizWinL > 0 ? round($bizLoad / $bizWinL, 4) : null,
                 'peak' => $peakMax, 'peakSite' => $peakSite, 'limitDays' => $limitDays, 'detailDays' => $peakDays
             ],
             'energy' => $energy, 'peaks' => $peaks, 'sitePeaks' => $sitePeaks,
-            'heat' => ['grid' => $grid, 'days' => count($detailDaySet)],
+            'heat' => ['grid' => $grid, 'gridL' => $hasLoad ? $gridL : null, 'days' => count($detailDaySet)],
             'rows' => $rows, 'scopeOptions' => self::ScopeOptions($meta),
             'source' => ['histStart' => $histStart, 'setup' => $setup]
         ];
@@ -397,7 +427,7 @@ final class EVReport
         };
         $L = [];
         if ($mode === 'summen') {
-            $L[] = 'Standort;Säule;Ladepunkt;Von;Bis;Energie kWh;Ladevorgänge;Ø kWh je Vorgang;Ø Dauer h;Belegt h;Auslastung %';
+            $L[] = 'Standort;Säule;Ladepunkt;Von;Bis;Energie kWh;Ladevorgänge;Ø kWh je Vorgang;Ø Dauer h;Belegt h;Auslastung %;Lädt aktiv h;Aktiv geladen %';
             foreach ($pts as $p) {
                 $kwh = array_sum(self::energyDays($reader, $p, $P['start'], $end));
                 $kwhDet = 0.0;
@@ -410,24 +440,28 @@ final class EVReport
                 $has = $to > $from;
                 $ses = $has ? count(EVStats::Starts($iv)) : null;
                 $busy = $has ? EVStats::Seconds($iv) : null;
+                $hasL = $has && !empty($p['varL']);
+                $load = $hasL ? EVStats::Seconds(self::intervals($reader, $p, $P['start'], $end, 'varL')[0]) : null;
                 $L[] = implode(';', [
                     $esc($p['siteName']), $esc($p['saeuleName']), $esc($p['name']), $ds($P['start']), $ds(EVPeriod::AddDays(EVPeriod::Day0($end - 1), 0)),
                     $f2($kwh), $ses === null ? '' : (string) $ses, $ses ? $f2($kwhDet / $ses) : '', $ses ? $f2($busy / 3600 / $ses) : '',
-                    $has ? $f2($busy / 3600) : '', $has ? $f2($busy / ($to - $from) * 100) : ''
+                    $has ? $f2($busy / 3600) : '', $has ? $f2($busy / ($to - $from) * 100) : '',
+                    $hasL ? $f2($load / 3600) : '', $hasL ? $f2($load / ($to - $from) * 100) : ''
                 ]);
             }
         } else {
-            $L[] = ($P['unit'] === 'Tag' ? 'Datum' : 'Monat') . ';Standort;Säule;Ladepunkt;Energie kWh;Ladevorgänge;Belegt h';
+            $L[] = ($P['unit'] === 'Tag' ? 'Datum' : 'Monat') . ';Standort;Säule;Ladepunkt;Energie kWh;Ladevorgänge;Belegt h;Lädt aktiv h';
             $perPoint = [];
             foreach ($pts as $k => $p) {
-                $perPoint[$k] = [self::energyDays($reader, $p, $P['start'], $end), self::intervals($reader, $p, $P['start'], $end)];
+                $perPoint[$k] = [self::energyDays($reader, $p, $P['start'], $end), self::intervals($reader, $p, $P['start'], $end),
+                    empty($p['varL']) ? null : self::intervals($reader, $p, $P['start'], $end, 'varL')[0]];
             }
             foreach ($P['buckets'] as $b) {
                 if ($b['s'] > $now) {
                     continue;
                 }
                 foreach ($pts as $k => $p) {
-                    [$days, [$iv, $from, $to]] = $perPoint[$k];
+                    [$days, [$iv, $from, $to], $ivL] = $perPoint[$k];
                     $kwh = 0.0;
                     $any = false;
                     foreach ($days as $day => $v) {
@@ -442,6 +476,7 @@ final class EVReport
                     $det = $to > $from && $b['e'] > $from && $b['s'] < $to;
                     $ses = 0;
                     $busy = 0;
+                    $load = 0;
                     if ($det) {
                         foreach ($iv as $x) {
                             if ($x[2] && $x[0] >= $b['s'] && $x[0] < $b['e']) {
@@ -449,11 +484,14 @@ final class EVReport
                             }
                             $busy += max(0, min($x[1], $b['e']) - max($x[0], $b['s']));
                         }
+                        foreach ($ivL ?? [] as $x) {
+                            $load += max(0, min($x[1], $b['e']) - max($x[0], $b['s']));
+                        }
                     }
                     $L[] = implode(';', [
                         $P['unit'] === 'Tag' ? $ds($b['s']) : date('m.Y', $b['s']),
                         $esc($p['siteName']), $esc($p['saeuleName']), $esc($p['name']),
-                        $f2($kwh), $det ? (string) $ses : '', $det ? $f2($busy / 3600) : ''
+                        $f2($kwh), $det ? (string) $ses : '', $det ? $f2($busy / 3600) : '', $det && $ivL !== null ? $f2($load / 3600) : ''
                     ]);
                 }
             }

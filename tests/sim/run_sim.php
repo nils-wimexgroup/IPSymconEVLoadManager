@@ -257,6 +257,9 @@ check('Woche: Regenstauf trotz VPN-Ausfall vollständig', $w['rows'][1]['kwh'], 
 check('Woche: Regenstauf 2 Ladevorgänge', $w['rows'][1]['ses'], 2);
 check('Woche: Höchste Leistung Arensdorf', $w['sitePeaks'][0]['peak'], 11.04, 0.01);
 check('Woche: nie am Budget', $w['kpi']['limitDays'], 0);
+check('Woche: Arensdorf lädt 8 der 10 belegten Stunden (B2 zählt nicht)', $w['rows'][0]['load'] / $w['rows'][0]['occ'], 0.8, 0.01);
+check('Woche: Regenstauf lädt 3 von 4 Stunden, VPN-Ausfall gehalten', $w['rows'][1]['load'] / $w['rows'][1]['occ'], 0.75, 0.01);
+check('Woche: Heatmap aktiv geladen vorhanden', is_array($w['heat']['gridL']), true);
 check('Antwort trägt die Kennung der Kachel', $ask('View', ['type' => 'woche', 'off' => 0, 'scope' => 'all'])['cid'], 'test1');
 
 $m = $ask('View', ['type' => 'monat', 'off' => 0, 'scope' => 'site:ADF'])['data'];
@@ -285,6 +288,41 @@ check('CSV: falscher Link abgelehnt', strpos(out(function () use ($mW) {
 check('Kachel startet mit Bericht', strpos($mW->GetVisualizationTile(), '"ev":"report"') !== false, true);
 check('Formular Auswertung', count(json_decode($mW->GetConfigurationForm(), true)['actions'][0]['values']), 2);
 check('Formular Datensammler', count(json_decode($mA->GetConfigurationForm(), true)['actions'][0]['values']), 3);
+
+// Altbestand von vor "Lädt aktiv": Variable fehlt. Übernehmen legt sie an, das Aufräumen rechnet aus Belegt und Leistung nach.
+$noL = json_decode(S()['attr'][$evaw]['Sites'], true);
+foreach ($noL as &$so) {
+    foreach ($so['saeulen'] as &$sa) {
+        foreach ($sa['points'] as &$pt) {
+            $id = $pt['varL'];
+            unset(S()['obj'][$id], S()['vars'][$id], S()['logged'][$id], S()['logging'][$id], $pt['varL']);
+        }
+        unset($pt);
+    }
+    unset($sa);
+}
+unset($so);
+S()['attr'][$evaw]['Sites'] = json_encode($noL);
+$mW->ApplyChanges();
+$up = json_decode(S()['attr'][$evaw]['Sites'], true);
+check('Altbestand: Lädt-Variable angelegt', !empty($up['RGST']['saeulen'][0]['points'][0]['varL']), true);
+check('Altbestand: Nachberechnung vorgemerkt', isset($up['RGST']['saeulen'][0]['points'][0]['lFill']), true);
+for ($i = 0; $i < 3; $i++) {
+    S()['now'] += 60;
+    $mW->Housekeeping();
+}
+$pending = 0;
+foreach (json_decode(S()['attr'][$evaw]['Sites'], true) as $so) {
+    foreach ($so['saeulen'] as $sa) {
+        foreach ($sa['points'] as $pt) {
+            $pending += isset($pt['lFill']) ? 1 : 0;
+        }
+    }
+}
+check('Altbestand: alle Ladepunkte nachgerechnet', $pending, 0);
+$w2 = $ask('View', ['type' => 'woche', 'off' => 0, 'scope' => 'all'])['data'];
+check('Altbestand: Arensdorf nachgerechnet', $w2['rows'][0]['load'] / $w2['rows'][0]['occ'], 0.8, 0.01);
+check('Altbestand: Regenstauf ohne den gehaltenen Ausfall', $w2['rows'][1]['load'] / $w2['rows'][1]['occ'], 0.625, 0.02);
 
 // Anzahl Ladepunkte ändert sich: Aufzeichnung anhalten
 SetValue($cp['count'], 3);
